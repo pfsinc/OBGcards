@@ -150,6 +150,10 @@
 
 <header>
   <div class="logo">OGB<span>CARDS</span></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn btn-ghost" onclick="exportBackup()" title="Download a JSON backup of all your cards">⬇ Backup</button>
+    <label class="btn btn-ghost" style="cursor:pointer" title="Restore from a JSON backup file">⬆ Restore<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
+  </div>
   <div class="header-stats">
     <div class="hstat">
       <div class="hstat-label">Rolling Annual ROI</div>
@@ -1499,6 +1503,50 @@ function confirmImport() {
 document.querySelectorAll('.modal-overlay').forEach(el=>{
   el.addEventListener('click',e=>{if(e.target===el) el.classList.remove('open');});
 });
+
+// ---- BACKUP / RESTORE ----
+function exportBackup() {
+  const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), cards }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ogbcards-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const incoming = data.cards || (Array.isArray(data) ? data : null);
+      if (!incoming) { alert('Invalid backup file — no cards data found.'); return; }
+      if (cards.length > 0) {
+        const merge = confirm(`You have ${cards.length} existing card(s).\n\nOK = Merge with backup (keeps all)\nCancel = Replace with backup (overwrites)`);
+        if (merge) {
+          const existingIds = new Set(cards.map(c => c.id));
+          const added = incoming.filter(c => !existingIds.has(c.id));
+          cards.push(...added);
+          alert(`✓ Merged: added ${added.length} new card(s). ${incoming.length - added.length} duplicate(s) skipped.`);
+        } else {
+          cards = incoming;
+          alert(`✓ Restored ${cards.length} card(s) from backup.`);
+        }
+      } else {
+        cards = incoming;
+        alert(`✓ Restored ${cards.length} card(s) from backup.`);
+      }
+      save(); renderAll();
+    } catch(err) {
+      alert('Could not read backup file. Make sure it is a valid OGBcards JSON backup.');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
 
 // ---- EXPORTS ----
 function exportCSV() {
