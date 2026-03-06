@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OGBcards</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://apis.google.com/js/api.js" async></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -150,8 +152,15 @@
 
 <header>
   <div class="logo">OGB<span>CARDS</span></div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <button class="btn btn-ghost" onclick="exportBackup()" title="Download a JSON backup of all your cards">⬇ Backup</button>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-ghost" id="gdrive-save-btn" onclick="gDriveSave()" title="Save to Google Drive">
+      <span id="gdrive-save-label">☁ Save to Drive</span>
+    </button>
+    <button class="btn btn-ghost" id="gdrive-load-btn" onclick="gDriveLoad()" title="Load from Google Drive">
+      <span id="gdrive-load-label">☁ Load from Drive</span>
+    </button>
+    <div style="width:1px;height:20px;background:var(--border)"></div>
+    <button class="btn btn-ghost" onclick="exportBackup()" title="Download a JSON backup">⬇ Backup</button>
     <label class="btn btn-ghost" style="cursor:pointer" title="Restore from a JSON backup file">⬆ Restore<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
   </div>
   <div class="header-stats">
@@ -1642,8 +1651,143 @@ function exportPDF() {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+// ---- GOOGLE DRIVE INTEGRATION ----
+// Uses Google Identity Services + Drive REST API
+// File is always saved as "ogbcards-data.json" in the root of your Google Drive
+
+const GDRIVE_CLIENT_ID = ''; // <-- paste your Google OAuth Client ID here
+const GDRIVE_FILENAME  = 'ogbcards-data.json';
+const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
+
+let gToken = null;
+let gFileId = null; // cached file ID once found/created
+
+function gSetLabel(btn, text, spinning=false) {
+  const el = document.getElementById(btn);
+  if (el) el.textContent = spinning ? '⏳ ' + text : text;
+}
+
+function gSignIn(callback) {
+  if (!GDRIVE_CLIENT_ID) {
+    alert('Google Drive is not configured yet.\n\nSee the Setup section in the How to Connect Google Drive instructions below the app, or ask for help.');
+    return;
+  }
+  if (gToken) { callback(gToken); return; }
+  google.accounts.oauth2.initTokenClient({
+    client_id: GDRIVE_CLIENT_ID,
+    scope: GDRIVE_SCOPE,
+    callback: (resp) => {
+      if (resp.error) { alert('Google sign-in failed: ' + resp.error); return; }
+      gToken = resp.access_token;
+      callback(gToken);
+    }
+  }).requestAccessToken();
+}
+
+async function gFindFile(token) {
+  if (gFileId) return gFileId;
+  const q = encodeURIComponent(`name='${GDRIVE_FILENAME}' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const data = await res.json();
+  gFileId = data.files && data.files.length > 0 ? data.files[0].id : null;
+  return gFileId;
+}
+
+async function gDriveSave() {
+  gSetLabel('gdrive-save-label', 'Saving...', true);
+  gSignIn(async (token) => {
+    try {
+      const content = JSON.stringify({ version:1, savedAt: new Date().toISOString(), cards }, null, 2);
+      const blob = new Blob([content], { type: 'application/json' });
+      const fileId = await gFindFile(token);
+
+      if (fileId) {
+        // Update existing file
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method: 'PATCH',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: blob
+        });
+      } else {
+        // Create new file
+        const meta = new Blob([JSON.stringify({ name: GDRIVE_FILENAME, mimeType: 'application/json' })], { type: 'application/json' });
+        const form = new FormData();
+        form.append('metadata', meta);
+        form.append('file', blob);
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token },
+          body: form
+        });
+        const created = await res.json();
+        gFileId = created.id;
+      }
+      gSetLabel('gdrive-save-label', '☁ Saved ✓');
+      setTimeout(() => gSetLabel('gdrive-save-label', '☁ Save to Drive'), 2500);
+    } catch(e) {
+      gSetLabel('gdrive-save-label', '☁ Save to Drive');
+      alert('Save to Drive failed: ' + e.message);
+    }
+  });
+}
+
+async function gDriveLoad() {
+  gSetLabel('gdrive-load-label', 'Loading...', true);
+  gSignIn(async (token) => {
+    try {
+      const fileId = await gFindFile(token);
+      if (!fileId) {
+        gSetLabel('gdrive-load-label', '☁ Load from Drive');
+        alert('No OGBcards save file found in your Google Drive yet.\nAdd some cards and hit "Save to Drive" first.');
+        return;
+      }
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      const incoming = data.cards || [];
+      if (!incoming.length) { gSetLabel('gdrive-load-label', '☁ Load from Drive'); alert('Drive file is empty.'); return; }
+      if (cards.length > 0) {
+        const replace = confirm(`Load ${incoming.length} cards from Drive?\n\nOK = Replace local data\nCancel = Abort`);
+        if (!replace) { gSetLabel('gdrive-load-label', '☁ Load from Drive'); return; }
+      }
+      cards = incoming;
+      save();
+      renderAll();
+      gSetLabel('gdrive-load-label', `☁ Loaded ${incoming.length} cards ✓`);
+      setTimeout(() => gSetLabel('gdrive-load-label', '☁ Load from Drive'), 3000);
+    } catch(e) {
+      gSetLabel('gdrive-load-label', '☁ Load from Drive');
+      alert('Load from Drive failed: ' + e.message);
+    }
+  });
+}
+
 // boot
 loadData();
 </script>
+
+<div style="max-width:700px;margin:32px auto 48px;padding:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13px;line-height:1.8;color:var(--muted)">
+  <div style="font-family:var(--font-display);font-size:18px;letter-spacing:2px;color:var(--accent);margin-bottom:14px">☁ HOW TO CONNECT GOOGLE DRIVE</div>
+  <p style="margin-bottom:12px">To enable <strong style="color:var(--text)">Save to Drive</strong> and <strong style="color:var(--text)">Load from Drive</strong>, you need a free Google OAuth Client ID. Takes about 5 minutes.</p>
+  <ol style="padding-left:20px;display:flex;flex-direction:column;gap:8px">
+    <li>Go to <strong style="color:var(--text)">console.cloud.google.com</strong> and sign in with your Google account</li>
+    <li>Click <strong style="color:var(--text)">Create Project</strong> → name it "OGBcards" → Create</li>
+    <li>Left menu → <strong style="color:var(--text)">APIs & Services → Library</strong> → search <strong style="color:var(--text)">Google Drive API</strong> → Enable</li>
+    <li>Left menu → <strong style="color:var(--text)">OAuth consent screen</strong> → External → fill in app name "OGBcards" and your email → Save</li>
+    <li>Left menu → <strong style="color:var(--text)">Credentials</strong> → Create Credentials → <strong style="color:var(--text)">OAuth Client ID</strong></li>
+    <li>Application type: <strong style="color:var(--text)">Web application</strong> · Name: OGBcards</li>
+    <li>Under <strong style="color:var(--text)">Authorised JavaScript origins</strong> add: <strong style="color:var(--text)">https://YOUR-USERNAME.github.io</strong></li>
+    <li>Click Create → copy the <strong style="color:var(--text)">Client ID</strong></li>
+    <li>Open <strong style="color:var(--text)">ogbcards.html</strong> in a text editor, find the line:<br>
+      <code style="color:var(--accent);background:var(--surface2);padding:2px 8px;border-radius:3px">const GDRIVE_CLIENT_ID = '';</code><br>
+      and paste your Client ID between the quotes</li>
+    <li>Save and re-upload to GitHub Pages — Drive sync now works everywhere</li>
+  </ol>
+  <p style="margin-top:14px">Your data saves as <strong style="color:var(--text)">ogbcards-data.json</strong> in your Google Drive root. Only you can access it.</p>
+</div>
+
 </body>
 </html>
