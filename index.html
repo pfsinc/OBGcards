@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OGBcards</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11; --surface: #16181c; --surface2: #1e2127; --border: #2a2d35;
+    --accent: #e8c84a; --accent2: #4ae8a0; --red: #e84a4a; --blue: #4a8fe8;
+    --orange: #e87e4a; --text: #f0f0f0; --muted: #7a7f8e;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; font-size: 14px; }
+
+  /* LOADING */
+  #loading-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; gap: 16px; }
+  .loading-logo { font-family: var(--font-display); font-size: 48px; letter-spacing: 4px; color: var(--accent); }
+  .loading-logo span { color: var(--text); }
+  .loading-sub { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 2px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* SAVE INDICATOR */
+  #save-indicator { position: fixed; bottom: 16px; right: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: 0; transition: opacity 0.3s; z-index: 500; }
+  #save-indicator.saving { opacity: 1; color: var(--accent); }
+  #save-indicator.saved { opacity: 1; color: var(--accent2); }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; gap: 16px; flex-wrap: wrap; }
+  .logo { font-family: var(--font-display); font-size: 26px; letter-spacing: 2px; color: var(--accent); }
+  .logo span { color: var(--text); }
+  .header-stats { display: flex; gap: 28px; }
+  .hstat { text-align: right; }
+  .hstat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); }
+  .hstat-value { font-family: var(--font-mono); font-size: 17px; font-weight: 500; }
+  .hstat-value.pos { color: var(--accent2); } .hstat-value.neg { color: var(--red); } .hstat-value.neutral { color: var(--accent); }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 28px; overflow-x: auto; }
+  .tab { padding: 11px 18px; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-family: var(--font-mono); color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .main { padding: 24px 28px; max-width: 1500px; margin: 0 auto; }
+
+  .dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
+  .dcard { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .dcard-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 6px; }
+  .dcard-value { font-family: var(--font-mono); font-size: 20px; font-weight: 500; }
+  .dcard-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .section-title { font-family: var(--font-display); font-size: 19px; letter-spacing: 2px; color: var(--accent); }
+
+  .btn { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #000; font-weight: 500; }
+  .btn-primary:hover { background: #f5d96a; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); font-size: 10px; padding: 4px 9px; }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+  .btn-small { font-size: 10px; padding: 4px 10px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .btn-small:hover { color: var(--text); }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead tr { background: var(--surface2); border-bottom: 1px solid var(--border); }
+  th { padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .mono { font-family: var(--font-mono); }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 1px; font-weight: 500; white-space: nowrap; }
+  .badge-sold { background: rgba(78,232,160,0.15); color: var(--accent2); }
+  .badge-psa { background: rgba(74,143,232,0.15); color: var(--blue); }
+  .badge-hold { background: rgba(232,200,74,0.15); color: var(--accent); }
+  .badge-vault { background: rgba(74,200,232,0.15); color: #4ac8e8; }
+  .badge-vault-sale { background: rgba(74,232,160,0.15); color: #4ae8a0; border: 1px solid rgba(74,232,160,0.3); }
+  .badge-personal { background: rgba(232,126,74,0.15); color: var(--orange); }
+  .badge-consign { background: rgba(200,74,232,0.15); color: #c84ae8; }
+  .badge-purchased { background: rgba(120,120,120,0.15); color: var(--muted); }
+  .badge-graded-in { background: rgba(232,74,74,0.15); color: #e84a4a; }
+  .badge-regrade { background: rgba(74,143,232,0.2); color: #7ab8f5; border: 1px solid rgba(74,143,232,0.3); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; width: 580px; max-width: 96vw; max-height: 92vh; overflow-y: auto; }
+  .modal-title { font-family: var(--font-display); font-size: 21px; letter-spacing: 2px; color: var(--accent); margin-bottom: 20px; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); }
+  input, select, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 11px; outline: none; transition: border-color 0.15s; width: 100%; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+  .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  .field-group { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 6px; grid-column: 1 / -1; }
+  .field-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 10px; }
+
+  .roi-pos { color: var(--accent2); } .roi-neg { color: var(--red); } .roi-neutral { color: var(--muted); }
+
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .filter-bar input { flex: 1; min-width: 180px; }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); }
+  .empty-state .big { font-size: 44px; margin-bottom: 10px; }
+  .empty-state p { font-size: 13px; line-height: 1.6; }
+
+  .panel-view { display: none; }
+  .panel-view.active { display: block; }
+
+  .roi-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .roi-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .roi-panel-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 14px; }
+  .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-label { color: var(--muted); }
+  .breakdown-value { font-family: var(--font-mono); }
+
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sort-asc::after { content: ' ↑'; color: var(--accent); }
+  th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+
+  .action-row { display: flex; gap: 5px; align-items: center; }
+
+  @media (max-width: 900px) {
+    .dash-grid { grid-template-columns: repeat(2, 1fr); }
+    header { flex-direction: column; align-items: flex-start; }
+    .header-stats { gap: 16px; flex-wrap: wrap; }
+    .main { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="loading-logo">OGB<span>CARDS</span></div>
+  <div class="spinner"></div>
+  <div class="loading-sub">Loading your collection...</div>
+</div>
+
+<div id="save-indicator">💾 Saving...</div>
+
+<header>
+  <div class="logo">OGB<span>CARDS</span></div>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-label">Rolling Annual ROI</div>
+      <div class="hstat-value neutral" id="hdr-roi">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Total Invested</div>
+      <div class="hstat-value" id="hdr-invested">$0.00</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Realized Profit</div>
+      <div class="hstat-value pos" id="hdr-profit">$0.00</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Active Inventory</div>
+      <div class="hstat-value neutral" id="hdr-inventory">0 cards</div>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('inventory',this)">Inventory</button>
+  <button class="tab" onclick="switchTab('psa-orders',this)">📦 PSA Orders</button>
+  <button class="tab" onclick="switchTab('sold',this)">Sold</button>
+  <button class="tab" onclick="switchTab('roi',this)">ROI Summary</button>
+  <button class="tab" onclick="switchTab('import',this)">⬆ Import</button>
+</div>
+
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div class="dash-grid">
+    <div class="dcard">
+      <div class="dcard-label">Cards Purchased</div>
+      <div class="dcard-value neutral mono" id="dash-total">0</div>
+      <div class="dcard-sub">all time</div>
+    </div>
+    <div class="dcard">
+      <div class="dcard-label">At PSA</div>
+      <div class="dcard-value mono" style="color:var(--blue)" id="dash-psa">0</div>
+      <div class="dcard-sub" id="dash-psa-sub">awaiting grade</div>
+    </div>
+    <div class="dcard">
+      <div class="dcard-label">At DC Sports</div>
+      <div class="dcard-value mono" style="color:#c84ae8" id="dash-consign">0</div>
+      <div class="dcard-sub">in consignment</div>
+    </div>
+    <div class="dcard">
+      <div class="dcard-label">Personal Collection</div>
+      <div class="dcard-value mono" style="color:var(--accent)" id="dash-personal">0</div>
+      <div class="dcard-sub">in hand</div>
+    </div>
+    <div class="dcard">
+      <div class="dcard-label">PSA Vault</div>
+      <div class="dcard-value mono" style="color:#4ac8e8" id="dash-vault">0</div>
+      <div class="dcard-sub" id="dash-vault-sub">stored at PSA</div>
+    </div>
+    <div class="dcard">
+      <div class="dcard-label">Cards Sold</div>
+      <div class="dcard-value pos mono" id="dash-sold">0</div>
+      <div class="dcard-sub" id="dash-sold-sub">$0 revenue</div>
+    </div>
+  </div>
+
+  <!-- INVENTORY TAB -->
+  <div id="panel-inventory" class="panel-view active">
+    <div class="section-header">
+      <div class="section-title">INVENTORY</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn btn-ghost" onclick="exportPDF()">⬇ PDF</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Card</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="inv-search" placeholder="Search by player, set, year..." oninput="renderInventory()">
+      <select onchange="renderInventory()" id="inv-status-filter">
+        <option value="">All Statuses</option>
+        <option value="Just purchased">Just Purchased (Raw)</option>
+        <option value="Just purchased - graded">Just Purchased (Graded Slab)</option>
+        <option value="At PSA (grading)">At PSA</option>
+        <option value="At DC Sports (consignment)">At DC Sports</option>
+        <option value="Holding - PSA Vault">PSA Vault (Holding)</option>
+        <option value="Holding - PSA Vault (For Sale)">PSA Vault (For Sale)</option>
+        <option value="Personal collection">Personal Collection</option>
+      </select>
+    </div>
+
+    <!-- BULK ACTION BAR -->
+    <div id="bulk-action-bar" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:10px 16px;margin-bottom:12px;display:none;align-items:center;gap:14px;flex-wrap:wrap">
+      <span id="bulk-count" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">0 selected</span>
+      <button class="btn btn-primary" style="font-size:11px;padding:6px 14px" onclick="openPsaOrderModal()">📦 Create PSA Order</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:6px 14px" onclick="clearBulkSelection()">Clear Selection</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="inv-select-all" onchange="toggleSelectAll(this)" title="Select all visible"></th>
+            <th class="sortable" onclick="sortBy('player')">Player</th>
+            <th class="sortable" onclick="sortBy('year')">Year</th>
+            <th class="sortable" onclick="sortBy('brand')">Brand</th>
+            <th class="sortable" onclick="sortBy('set')">Set</th>
+            <th class="sortable" onclick="sortBy('subset')">Subset</th>
+            <th class="sortable" onclick="sortBy('cardnum')">#</th>
+            <th class="sortable" onclick="sortBy('buyDate')">Purchased</th>
+            <th class="sortable" onclick="sortBy('buyPrice')">Buy Price</th>
+            <th>Fees</th>
+            <th class="sortable" onclick="sortBy('totalCost')">Total Cost</th>
+            <th class="sortable" onclick="sortBy('psaGrade')">Grade</th>
+            <th class="sortable" onclick="sortBy('status')">Status</th>
+            <th class="sortable" onclick="sortBy('estValue')">Est. Value</th>
+            <th>Unrealized</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="inv-tbody"></tbody>
+      </table>
+    </div>
+    <div id="inv-empty" class="empty-state" style="display:none">
+      <div class="big">🃏</div>
+      <p>No cards in inventory.<br>Add your first card to get started.</p>
+    </div>
+  </div>
+
+  <!-- SOLD TAB -->
+  <div id="panel-sold" class="panel-view">
+    <div class="section-header"><div class="section-title">SOLD CARDS</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" onclick="sortSoldBy('player')">Player</th>
+            <th class="sortable" onclick="sortSoldBy('year')">Year</th>
+            <th class="sortable" onclick="sortSoldBy('set')">Set</th>
+            <th class="sortable" onclick="sortSoldBy('subset')">Subset</th>
+            <th class="sortable" onclick="sortSoldBy('buyDate')">Bought</th>
+            <th class="sortable" onclick="sortSoldBy('saleDate')">Sold</th>
+            <th class="sortable" onclick="sortSoldBy('totalCost')">Cost Basis</th>
+            <th class="sortable" onclick="sortSoldBy('salePrice')">Sale Price</th>
+            <th>Sale Fees</th>
+            <th>Net Proceeds</th>
+            <th class="sortable" onclick="sortSoldBy('profit')">Profit</th>
+            <th class="sortable" onclick="sortSoldBy('roi')">ROI</th>
+            <th class="sortable" onclick="sortSoldBy('days')">Hold Days</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sold-tbody"></tbody>
+      </table>
+    </div>
+    <div id="sold-empty" class="empty-state" style="display:none">
+      <div class="big">💰</div>
+      <p>No cards sold yet.</p>
+    </div>
+  </div>
+
+  <!-- ROI SUMMARY TAB -->
+  <div id="panel-roi" class="panel-view">
+    <div class="section-header"><div class="section-title">ROI SUMMARY</div></div>
+    <div class="roi-summary-grid">
+      <div class="roi-panel">
+        <div class="roi-panel-title">Realized P&L (Sold Cards)</div>
+        <div class="breakdown-row"><span class="breakdown-label">Total Revenue</span><span class="breakdown-value mono" id="roi-revenue">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Total Cost Basis</span><span class="breakdown-value mono" id="roi-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Sale Fees & Shipping</span><span class="breakdown-value mono" id="roi-sale-fees">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Net Profit</span><span class="breakdown-value mono" id="roi-net"></span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Overall ROI</span><span class="breakdown-value mono" id="roi-pct"></span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Rolling Annual ROI</span><span class="breakdown-value mono" id="roi-annual"></span></div>
+      </div>
+      <div class="roi-panel">
+        <div class="roi-panel-title">Capital at Work</div>
+        <div class="breakdown-row"><span class="breakdown-label">Just Purchased</span><span class="breakdown-value mono" id="roi-inv-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Graded Slabs (pending decision)</span><span class="breakdown-value mono" id="roi-graded-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">At PSA</span><span class="breakdown-value mono" id="roi-psa-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">At DC Sports</span><span class="breakdown-value mono" id="roi-dc-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Holding (PSA Vault)</span><span class="breakdown-value mono" id="roi-vault-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Personal Collection</span><span class="breakdown-value mono" id="roi-pers-cost">$0.00</span></div>
+        <div class="breakdown-row"><span class="breakdown-label">Total Capital Deployed</span><span class="breakdown-value mono" id="roi-total-capital">$0.00</span></div>
+      </div>
+    </div>
+    <div class="roi-panel">
+      <div class="roi-panel-title">Sold Card Breakdown</div>
+      <table style="width:100%;min-width:0">
+        <thead><tr>
+          <th>Card</th><th>Cost Basis</th><th>Net Proceeds</th>
+          <th>Profit</th><th>ROI</th><th>Ann. ROI</th><th>Days Held</th>
+        </tr></thead>
+        <tbody id="roi-tbody"></tbody>
+      </table>
+      <div id="roi-empty" class="empty-state" style="display:none"><p>No sold cards yet.</p></div>
+    </div>
+  </div>
+
+  <!-- IMPORT TAB -->
+  <div id="panel-import" class="panel-view">
+    <div class="section-header"><div class="section-title">IMPORT EBAY PURCHASES</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px">
+      <div class="roi-panel">
+        <div class="roi-panel-title">📁 Upload a File (CSV or TXT)</div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:14px">Upload a CSV from a third-party eBay exporter. The importer will read what it can and let you review each row before importing.</p>
+        <label for="import-file" class="btn btn-primary" style="display:inline-block;cursor:pointer">Choose File</label>
+        <input type="file" id="import-file" accept=".csv,.txt" style="display:none" onchange="handleFileImport(this)">
+        <p style="color:var(--muted);font-size:11px;margin-top:10px">Accepts: .csv, .txt</p>
+      </div>
+      <div class="roi-panel">
+        <div class="roi-panel-title">📋 Paste Data from eBay</div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:10px">Go to <strong style="color:var(--text)">Purchase History</strong> on eBay, select all (Ctrl+A), copy (Ctrl+C), paste below.</p>
+        <textarea id="import-paste" rows="5" placeholder="Paste eBay purchase history or CSV data here..." style="width:100%;resize:vertical"></textarea>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="handlePasteImport()">Parse Data</button>
+      </div>
+    </div>
+    <div class="roi-panel" style="margin-bottom:18px">
+      <div class="roi-panel-title">💡 How to get your eBay data</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:13px;color:var(--muted);line-height:1.7">
+        <div><strong style="color:var(--text);display:block;margin-bottom:4px">Option A — Copy & Paste</strong>ebay.com → My eBay → Purchase History. Select all (Ctrl+A), copy, paste above.</div>
+        <div><strong style="color:var(--text);display:block;margin-bottom:4px">Option B — Request eBay Data</strong>Account Settings → Request your eBay data → Purchases + date range. Takes ~1 week.</div>
+        <div><strong style="color:var(--text);display:block;margin-bottom:4px">Option C — Manual CSV</strong>Spreadsheet with columns: Date, Item Title, Price, Shipping. Save as .csv.</div>
+      </div>
+    </div>
+    <div id="import-preview-wrap" style="display:none">
+      <div class="section-header" style="margin-top:6px">
+        <div class="section-title" style="font-size:15px">REVIEW BEFORE IMPORTING</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span style="color:var(--muted);font-size:12px" id="import-count-label"></span>
+          <button class="btn btn-ghost" onclick="clearImportPreview()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmImport()">Import Selected</button>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:10px">Edit fields before importing. Uncheck rows to skip.</p>
+      <div class="table-wrap" style="overflow-x:auto">
+        <table style="min-width:1100px">
+          <thead><tr>
+            <th style="width:32px"><input type="checkbox" id="import-check-all" checked onchange="toggleAllImportRows(this)"></th>
+            <th>Date</th><th>eBay Title</th><th>Player</th><th>Year</th>
+            <th>Brand</th><th>Set</th><th>Subset</th><th>#</th>
+            <th>Buy Price</th><th>Shipping</th><th>Status</th>
+          </tr></thead>
+          <tbody id="import-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PSA ORDERS TAB -->
+  <div id="panel-psa-orders" class="panel-view">
+    <div class="section-header">
+      <div class="section-title">PSA ORDERS</div>
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Select cards in Inventory to create a new order</span>
+    </div>
+    <div id="psa-orders-content"></div>
+    <div id="psa-orders-empty" class="empty-state" style="display:none">
+      <div class="big">📦</div>
+      <p>No PSA orders yet.<br>Select raw cards in Inventory and use <strong>Create PSA Order</strong>.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- PSA ORDER MODAL -->
+<div class="modal-overlay" id="modal-psa-order">
+  <div class="modal">
+    <div class="modal-title">CREATE PSA ORDER</div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:18px" id="psa-order-card-count"></p>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>PSA Order Number</label>
+        <input type="text" id="psa-order-number" placeholder="e.g. 12345678">
+      </div>
+      <div class="form-group">
+        <label>Service Level</label>
+        <select id="psa-order-level">
+          <option value="Economy">Economy (~$25/card)</option>
+          <option value="Regular">Regular (~$50/card)</option>
+          <option value="Express">Express (~$150/card)</option>
+          <option value="Super Express">Super Express (~$300/card)</option>
+          <option value="Custom">Custom</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Fee Per Card ($)</label>
+        <input type="number" id="psa-order-fee" step="0.01" min="0" placeholder="25.00">
+      </div>
+      <div class="form-group">
+        <label>Shipping to PSA ($)</label>
+        <input type="number" id="psa-order-ship" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label>My Pre-Grade Prediction (all cards)</label>
+        <select id="psa-order-pregrade">
+          <option value="">— No prediction —</option>
+          <option value="10">PSA 10</option><option value="9.5">PSA 9.5</option><option value="9">PSA 9</option>
+          <option value="8.5">PSA 8.5</option><option value="8">PSA 8</option><option value="7">PSA 7</option>
+          <option value="6">PSA 6</option><option value="5">PSA 5</option>
+        </select>
+      </div>
+    </div>
+    <div id="psa-order-card-list" style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:200px;overflow-y:auto;font-size:12px;color:var(--muted);line-height:2"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-psa-order')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmPsaOrder()">Submit Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CARD MODAL -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <div class="modal-title" id="add-modal-title">ADD CARD</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Card Type</label>
+        <select id="f-card-type" onchange="updateCardTypeFields()">
+          <option value="raw">Raw (Ungraded)</option>
+          <option value="pregraded">Previously Graded Slab</option>
+        </select>
+      </div>
+      <div id="pregraded-fields" class="field-group" style="display:none">
+        <div class="field-group-title">Existing Slab Details</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group">
+            <label>Grading Company</label>
+            <select id="f-orig-grader">
+              <option value="PSA">PSA</option><option value="BGS">BGS (Beckett)</option>
+              <option value="SGC">SGC</option><option value="CSG">CSG</option><option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Grade on Slab</label>
+            <select id="f-orig-grade">
+              <option value="">Unknown</option>
+              <option value="10">10 (Gem Mint)</option><option value="9.5">9.5</option>
+              <option value="9">9 (Mint)</option><option value="8.5">8.5</option>
+              <option value="8">8 (NM-MT)</option><option value="7.5">7.5</option>
+              <option value="7">7 (NM)</option><option value="6">6 (EX-MT)</option>
+              <option value="5">5 (EX)</option><option value="4">4 (VG-EX)</option>
+              <option value="3">3 (VG)</option><option value="2">2 (Good)</option><option value="1">1 (Poor)</option>
+            </select>
+          </div>
+          <div class="form-group full" style="font-size:12px;color:var(--muted)">Decide what to do later via <strong style="color:var(--text)">Update Status</strong> — crack & regrade, vault, hold, or sell as-is.</div>
+        </div>
+      </div>
+      <div class="form-group full"><label>Player / Subject</label><input type="text" id="f-player" placeholder="e.g. Mike Trout"></div>
+      <div class="form-group"><label>Year</label><input type="number" id="f-year" placeholder="2021" min="1900" max="2035"></div>
+      <div class="form-group"><label>Brand / Manufacturer</label><input type="text" id="f-brand" placeholder="Topps"></div>
+      <div class="form-group"><label>Set</label><input type="text" id="f-set" placeholder="Chrome"></div>
+      <div class="form-group"><label>Subset / Parallel</label><input type="text" id="f-subset" placeholder="Refractor, Gold..."></div>
+      <div class="form-group"><label>Card #</label><input type="text" id="f-cardnum" placeholder="#1"></div>
+      <div class="form-group full"><label>Notes / Variant</label><input type="text" id="f-desc" placeholder="Auto, RC, /50... (optional)"></div>
+      <div class="form-group"><label>Purchase Date</label><input type="date" id="f-buy-date"></div>
+      <div class="form-group"><label>Purchase Price ($)</label><input type="number" id="f-buy-price" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group"><label>Buyer Fees ($)</label><input type="number" id="f-buyer-fees" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group"><label>Shipping Paid ($)</label><input type="number" id="f-ship-in" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group full">
+        <label>Initial Status</label>
+        <select id="f-status" onchange="updateStatusFields()">
+          <option value="Just purchased">Just Purchased (Raw)</option>
+          <option value="Just purchased - graded">Just Purchased (Graded Slab)</option>
+          <option value="At PSA (grading)">Sending to PSA</option>
+          <option value="At DC Sports (consignment)">Sending to DC Sports</option>
+          <option value="Holding - PSA Vault">PSA Vault (Holding)</option>
+          <option value="Holding - PSA Vault (For Sale)">PSA Vault (For Sale)</option>
+          <option value="Personal collection">Personal Collection</option>
+        </select>
+      </div>
+      <div id="psa-fields" class="field-group" style="display:none">
+        <div class="field-group-title">PSA Grading Details</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group">
+            <label>PSA Service Level</label>
+            <select id="f-psa-level">
+              <option value="Economy">Economy (~$25)</option><option value="Regular">Regular (~$50)</option>
+              <option value="Express">Express (~$150)</option><option value="Super Express">Super Express (~$300)</option>
+              <option value="Custom">Custom</option>
+            </select>
+          </div>
+          <div class="form-group"><label>PSA Grading Fee ($)</label><input type="number" id="f-psa-fee" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group"><label>Shipping to PSA ($)</label><input type="number" id="f-ship-psa" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group">
+            <label>PSA Grade (if returned)</label>
+            <select id="f-psa-grade">
+              <option value="">Pending</option>
+              <option value="10">PSA 10</option><option value="9">PSA 9</option><option value="8">PSA 8</option>
+              <option value="7">PSA 7</option><option value="6">PSA 6</option><option value="5">PSA 5</option>
+              <option value="4">PSA 4</option><option value="3">PSA 3</option><option value="2">PSA 2</option><option value="1">PSA 1</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="dc-fields" class="field-group" style="display:none">
+        <div class="field-group-title">DC Sports Consignment</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group"><label>Shipping to DC Sports ($)</label><input type="number" id="f-ship-dc" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group"><label>DC Sports Commission %</label><input type="number" id="f-dc-commission" step="0.1" min="0" max="100" placeholder="15"></div>
+        </div>
+      </div>
+      <div class="form-group full"><label>Est. Market Value ($) — optional</label><input type="number" id="f-est-value" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group full"><label>Notes</label><input type="text" id="f-notes" placeholder="Any notes..."></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add')">Cancel</button>
+      <button class="btn btn-primary" id="add-save-btn" onclick="saveCard()">Save Card</button>
+    </div>
+  </div>
+</div>
+
+<!-- SELL MODAL -->
+<div class="modal-overlay" id="modal-sell">
+  <div class="modal">
+    <div class="modal-title">MARK AS SOLD</div>
+    <input type="hidden" id="sell-id">
+    <div class="form-grid">
+      <div class="form-group full"><label>Card</label><input type="text" id="sell-card-name" readonly style="opacity:0.6"></div>
+      <div class="form-group"><label>Sale Date</label><input type="date" id="sell-date"></div>
+      <div class="form-group"><label>Sale Price ($)</label><input type="number" id="sell-price" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group">
+        <label>Platform</label>
+        <select id="sell-platform">
+          <option value="eBay">eBay</option><option value="DC Sports Auction">DC Sports Auction</option>
+          <option value="PWCC">PWCC</option><option value="Private Sale">Private Sale</option><option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Seller Fees / Commission ($)</label><input type="number" id="sell-fees" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group"><label>Shipping to Buyer ($)</label><input type="number" id="sell-ship" step="0.01" min="0" placeholder="0.00"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-sell')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmSell()">Record Sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPDATE STATUS MODAL -->
+<div class="modal-overlay" id="modal-status">
+  <div class="modal">
+    <div class="modal-title">UPDATE STATUS</div>
+    <input type="hidden" id="status-id">
+    <div class="form-grid">
+      <div class="form-group full"><label>Card</label><input type="text" id="status-card-name" readonly style="opacity:0.6"></div>
+      <div class="form-group full">
+        <label>New Status</label>
+        <select id="status-new" onchange="updateStatusModalFields()">
+          <option value="Just purchased">Just Purchased (Raw)</option>
+          <option value="Just purchased - graded">Just Purchased (Graded Slab)</option>
+          <option value="At PSA (grading)">At PSA (Grading / Regrade)</option>
+          <option value="At DC Sports (consignment)">At DC Sports (Consignment)</option>
+          <option value="Holding - PSA Vault">PSA Vault (Holding)</option>
+          <option value="Holding - PSA Vault (For Sale)">PSA Vault (For Sale)</option>
+          <option value="Personal collection">Personal Collection</option>
+        </select>
+      </div>
+      <div id="status-regrade-note" class="field-group" style="display:none;background:rgba(74,143,232,0.07);border-color:rgba(74,143,232,0.25)">
+        <div class="field-group-title" style="color:#7ab8f5">🔄 Crack & Regrade</div>
+        <div id="status-regrade-desc" style="font-size:12px;color:var(--muted);margin-bottom:10px">Original slab will be cracked. Original grade is preserved in history.</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group"><label>Current Grader</label><input type="text" id="status-orig-grader-display" readonly style="opacity:0.5"></div>
+          <div class="form-group"><label>Current Grade</label><input type="text" id="status-orig-grade-display" readonly style="opacity:0.5"></div>
+        </div>
+      </div>
+      <div id="status-psa-fields" class="field-group" style="display:none">
+        <div class="field-group-title">PSA Details</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group"><label>PSA Grading Fee ($)</label><input type="number" id="status-psa-fee" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group"><label>Shipping to PSA ($)</label><input type="number" id="status-ship-psa" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group">
+            <label>My Pre-Grade Prediction</label>
+            <select id="status-pregrade">
+              <option value="">— No prediction —</option>
+              <option value="10">PSA 10</option><option value="9.5">PSA 9.5</option><option value="9">PSA 9</option>
+              <option value="8.5">PSA 8.5</option><option value="8">PSA 8</option><option value="7">PSA 7</option>
+              <option value="6">PSA 6</option><option value="5">PSA 5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>PSA Grade (if returned)</label>
+            <select id="status-psa-grade">
+              <option value="">Pending</option>
+              <option value="10">PSA 10</option><option value="9">PSA 9</option><option value="8">PSA 8</option>
+              <option value="7">PSA 7</option><option value="6">PSA 6</option><option value="5">PSA 5</option>
+              <option value="4">PSA 4</option><option value="3">PSA 3</option><option value="2">PSA 2</option><option value="1">PSA 1</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="status-dc-fields" class="field-group" style="display:none">
+        <div class="field-group-title">DC Sports Details</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group"><label>Shipping to DC Sports ($)</label><input type="number" id="status-ship-dc" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group"><label>DC Sports Commission %</label><input type="number" id="status-dc-commission" step="0.1" min="0" max="100" placeholder="15"></div>
+        </div>
+      </div>
+      <div class="form-group full"><label>Est. Market Value ($)</label><input type="number" id="status-est-value" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group full"><label>Notes</label><input type="text" id="status-notes"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-status')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmStatusUpdate()">Update</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- PERSISTENT STORAGE ----
+const STORAGE_KEY = 'ogbcards-v1';
+let cards = [];
+let invSort = { key: 'buyDate', dir: 'desc' };
+let soldSort = { key: 'saleDate', dir: 'desc' };
+let selectedIds = new Set();
+let saveTimer = null;
+
+async function loadData() {
+  try {
+    const result = await window.storage.get(STORAGE_KEY);
+    if (result && result.value) {
+      const parsed = JSON.parse(result.value);
+      cards = parsed.cards || [];
+    }
+  } catch(e) {
+    cards = [];
+  }
+  document.getElementById('loading-screen').style.display = 'none';
+  renderAll();
+}
+
+function showSaveIndicator(state) {
+  const el = document.getElementById('save-indicator');
+  el.textContent = state === 'saving' ? '💾 Saving...' : '✓ Saved';
+  el.className = state === 'saving' ? 'saving' : 'saved';
+  if (state === 'saved') setTimeout(() => { el.className = ''; }, 2000);
+}
+
+async function save() {
+  showSaveIndicator('saving');
+  try {
+    await window.storage.set(STORAGE_KEY, JSON.stringify({ cards, savedAt: new Date().toISOString() }));
+    showSaveIndicator('saved');
+  } catch(e) {
+    console.error('Save failed', e);
+    showSaveIndicator('saved');
+  }
+}
+
+// ---- HELPERS ----
+function fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtPct(n) {
+  if (n === null || n === undefined || isNaN(n) || !isFinite(n)) return '—';
+  return (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
+}
+function roiClass(n) {
+  if (isNaN(n) || !isFinite(n)) return 'roi-neutral';
+  return n >= 0 ? 'roi-pos' : 'roi-neg';
+}
+function totalCost(c) {
+  return (parseFloat(c.buyPrice)||0)+(parseFloat(c.buyerFees)||0)+(parseFloat(c.shipIn)||0)
+        +(parseFloat(c.psaFee)||0)+(parseFloat(c.shipPsa)||0)+(parseFloat(c.shipDc)||0);
+}
+function netProceeds(c) {
+  return (parseFloat(c.salePrice)||0)-(parseFloat(c.saleFees)||0)-(parseFloat(c.saleShip)||0);
+}
+function daysHeld(c) {
+  const buy = new Date(c.buyDate), sell = c.saleDate ? new Date(c.saleDate) : new Date();
+  return Math.max(1, Math.round((sell-buy)/86400000));
+}
+function calcROI(c) {
+  const cost = totalCost(c), net = netProceeds(c);
+  if (!cost) return NaN;
+  return ((net-cost)/cost)*100;
+}
+function calcAnnualROI(c) {
+  const roi = calcROI(c); if (isNaN(roi)) return NaN;
+  return roi * (365/daysHeld(c));
+}
+
+function cardSortVal(c, key) {
+  switch(key) {
+    case 'player': return (c.player||c.desc||'').toLowerCase();
+    case 'year': return parseInt(c.year)||0;
+    case 'brand': return (c.brand||'').toLowerCase();
+    case 'set': return (c.set||'').toLowerCase();
+    case 'subset': return (c.subset||'').toLowerCase();
+    case 'cardnum': return (c.cardnum||'').toLowerCase();
+    case 'buyDate': return c.buyDate||'';
+    case 'saleDate': return c.saleDate||'';
+    case 'buyPrice': return parseFloat(c.buyPrice)||0;
+    case 'totalCost': return totalCost(c);
+    case 'psaGrade': return parseInt(c.psaGrade)||0;
+    case 'status': return c.status||'';
+    case 'estValue': return parseFloat(c.estValue)||0;
+    case 'profit': return netProceeds(c)-totalCost(c);
+    case 'roi': return calcROI(c)||-Infinity;
+    case 'days': return daysHeld(c);
+    case 'salePrice': return parseFloat(c.salePrice)||0;
+    default: return '';
+  }
+}
+
+function sortBy(key) {
+  if (invSort.key===key) invSort.dir = invSort.dir==='asc'?'desc':'asc';
+  else { invSort.key=key; invSort.dir='asc'; }
+  renderInventory();
+}
+function sortSoldBy(key) {
+  if (soldSort.key===key) soldSort.dir = soldSort.dir==='asc'?'desc':'asc';
+  else { soldSort.key=key; soldSort.dir='asc'; }
+  renderSold();
+}
+function applySortHeaders(panelId, sortState) {
+  document.querySelectorAll(`#${panelId} th.sortable`).forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    const fn = th.getAttribute('onclick')||'';
+    const m = fn.match(/'([^']+)'/);
+    if (m && m[1]===sortState.key) th.classList.add(sortState.dir==='asc'?'sort-asc':'sort-desc');
+  });
+}
+
+function statusBadge(s, c) {
+  const map = { 'Sold':'badge-sold','At PSA (grading)':'badge-psa',
+    'Holding - PSA Vault':'badge-vault','Holding - PSA Vault (For Sale)':'badge-vault-sale',
+    'Personal collection':'badge-personal',
+    'At DC Sports (consignment)':'badge-consign','Just purchased':'badge-purchased','Just purchased - graded':'badge-graded-in' };
+  let label = s;
+  if (s==='Holding - PSA Vault') label='PSA Vault · Holding';
+  else if (s==='Holding - PSA Vault (For Sale)') label='PSA Vault · For Sale';
+  else if (s==='Just purchased - graded') { const g=c&&c.origGrader?`${c.origGrader} ${c.origGrade} Slab`:'Graded Slab'; label=g; }
+  else if (s==='At PSA (grading)'&&c&&c.origGrader) label=`Regrade (was ${c.origGrader} ${c.origGrade})`;
+  const cls = (s==='At PSA (grading)'&&c&&c.origGrader&&c.origGrader!=='PSA') ? 'badge-regrade' : (map[s]||'badge-purchased');
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ---- TABS ----
+function switchTab(t, btn) {
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-view').forEach(el=>el.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-'+t).classList.add('active');
+  if (t==='roi') renderROI();
+  if (t==='sold') renderSold();
+  if (t==='psa-orders') renderPsaOrders();
+}
+
+// ---- MODALS ----
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ---- ADD / EDIT MODAL ----
+let editingId = null;
+
+function openAddModal() {
+  editingId = null;
+  document.getElementById('add-modal-title').textContent = 'ADD CARD';
+  document.getElementById('add-save-btn').textContent = 'Save Card';
+  ['f-player','f-year','f-brand','f-set','f-subset','f-cardnum','f-desc','f-buy-price','f-buyer-fees',
+   'f-ship-in','f-psa-fee','f-ship-psa','f-ship-dc','f-dc-commission','f-est-value','f-notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-buy-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-card-type').value = 'raw';
+  document.getElementById('f-orig-grader').value = 'PSA';
+  document.getElementById('f-orig-grade').value = '';
+  document.getElementById('f-status').value = 'Just purchased';
+  document.getElementById('f-psa-grade').value = '';
+  updateCardTypeFields();
+  updateStatusFields();
+  document.getElementById('modal-add').classList.add('open');
+}
+
+function openEditModal(id) {
+  const c = cards.find(x => x.id === id); if (!c) return;
+  editingId = id;
+  document.getElementById('add-modal-title').textContent = 'EDIT CARD';
+  document.getElementById('add-save-btn').textContent = 'Save Changes';
+  document.getElementById('f-player').value = c.player || '';
+  document.getElementById('f-year').value = c.year || '';
+  document.getElementById('f-brand').value = c.brand || '';
+  document.getElementById('f-set').value = c.set || '';
+  document.getElementById('f-subset').value = c.subset || '';
+  document.getElementById('f-cardnum').value = c.cardnum || '';
+  document.getElementById('f-desc').value = c.desc || '';
+  document.getElementById('f-buy-date').value = c.buyDate || '';
+  document.getElementById('f-buy-price').value = c.buyPrice || '';
+  document.getElementById('f-buyer-fees').value = c.buyerFees || '';
+  document.getElementById('f-ship-in').value = c.shipIn || '';
+  document.getElementById('f-psa-fee').value = c.psaFee || '';
+  document.getElementById('f-ship-psa').value = c.shipPsa || '';
+  document.getElementById('f-psa-grade').value = c.psaGrade || '';
+  document.getElementById('f-psa-level').value = c.psaLevel || 'Economy';
+  document.getElementById('f-ship-dc').value = c.shipDc || '';
+  document.getElementById('f-dc-commission').value = c.dcCommission || '';
+  document.getElementById('f-est-value').value = c.estValue || '';
+  document.getElementById('f-notes').value = c.notes || '';
+  document.getElementById('f-card-type').value = c.cardType || 'raw';
+  document.getElementById('f-orig-grader').value = c.origGrader || 'PSA';
+  document.getElementById('f-orig-grade').value = c.origGrade || '';
+  document.getElementById('f-status').value = c.status || 'Just purchased';
+  updateCardTypeFields();
+  updateStatusFields();
+  document.getElementById('modal-add').classList.add('open');
+}
+
+function updateCardTypeFields() {
+  const t = document.getElementById('f-card-type').value;
+  document.getElementById('pregraded-fields').style.display = t==='pregraded'?'block':'none';
+  const ss = document.getElementById('f-status');
+  if (t==='pregraded'&&ss.value==='Just purchased') ss.value='Just purchased - graded';
+  if (t==='raw'&&ss.value==='Just purchased - graded') ss.value='Just purchased';
+  updateStatusFields();
+}
+
+function updateStatusFields() {
+  const s = document.getElementById('f-status').value;
+  document.getElementById('psa-fields').style.display = s==='At PSA (grading)'?'block':'none';
+  document.getElementById('dc-fields').style.display = s==='At DC Sports (consignment)'?'block':'none';
+}
+
+function saveCard() {
+  const player = document.getElementById('f-player').value.trim();
+  if (!player) { alert('Please enter a player name.'); return; }
+  const buyPrice = parseFloat(document.getElementById('f-buy-price').value)||0;
+  if (!buyPrice) { alert('Please enter a purchase price.'); return; }
+  const year=document.getElementById('f-year').value.trim(), brand=document.getElementById('f-brand').value.trim();
+  const set=document.getElementById('f-set').value.trim(), subset=document.getElementById('f-subset').value.trim();
+  const cardnum=document.getElementById('f-cardnum').value.trim(), desc=document.getElementById('f-desc').value.trim();
+  const displayName=[year,brand,set,subset,player,cardnum,desc].filter(Boolean).join(' ');
+  const status=document.getElementById('f-status').value;
+  const cardType=document.getElementById('f-card-type').value;
+
+  const fields = {
+    cardType, player, year, brand, set, subset, cardnum, desc, displayName,
+    origGrader: cardType==='pregraded'?document.getElementById('f-orig-grader').value:'',
+    origGrade: cardType==='pregraded'?document.getElementById('f-orig-grade').value:'',
+    buyDate: document.getElementById('f-buy-date').value, buyPrice,
+    buyerFees: parseFloat(document.getElementById('f-buyer-fees').value)||0,
+    shipIn: parseFloat(document.getElementById('f-ship-in').value)||0,
+    psaFee: parseFloat(document.getElementById('f-psa-fee').value)||0,
+    shipPsa: parseFloat(document.getElementById('f-ship-psa').value)||0,
+    psaGrade: document.getElementById('f-psa-grade').value,
+    psaLevel: document.getElementById('f-psa-level').value,
+    shipDc: parseFloat(document.getElementById('f-ship-dc').value)||0,
+    dcCommission: parseFloat(document.getElementById('f-dc-commission').value)||0,
+    status, estValue: parseFloat(document.getElementById('f-est-value').value)||0,
+    notes: document.getElementById('f-notes').value,
+  };
+
+  if (editingId) {
+    // Edit existing card — preserve id, sale data, cracked history
+    const idx = cards.findIndex(x => x.id === editingId);
+    if (idx >= 0) {
+      cards[idx] = { ...cards[idx], ...fields };
+    }
+  } else {
+    // New card
+    cards.push({
+      id: Date.now().toString()+Math.random().toString(36).slice(2),
+      ...fields,
+      salePrice:0, saleFees:0, saleShip:0, saleDate:'', salePlatform:''
+    });
+  }
+  editingId = null;
+  save(); closeModal('modal-add'); renderAll();
+}
+
+// ---- SELL ----
+function openSellModal(id) {
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  document.getElementById('sell-id').value=id;
+  document.getElementById('sell-card-name').value=c.player||c.desc||'—';
+  document.getElementById('sell-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('sell-price').value='';
+  document.getElementById('sell-fees').value='';
+  document.getElementById('sell-ship').value='';
+  document.getElementById('sell-platform').value=c.status==='At DC Sports (consignment)'?'DC Sports Auction':'eBay';
+  document.getElementById('modal-sell').classList.add('open');
+}
+function confirmSell() {
+  const id=document.getElementById('sell-id').value;
+  const price=parseFloat(document.getElementById('sell-price').value)||0;
+  if (!price) { alert('Please enter a sale price.'); return; }
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  c.status='Sold'; c.salePrice=price;
+  c.saleFees=parseFloat(document.getElementById('sell-fees').value)||0;
+  c.saleShip=parseFloat(document.getElementById('sell-ship').value)||0;
+  c.saleDate=document.getElementById('sell-date').value;
+  c.salePlatform=document.getElementById('sell-platform').value;
+  save(); closeModal('modal-sell'); renderAll();
+}
+
+// ---- STATUS UPDATE ----
+function openStatusModal(id) {
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  document.getElementById('status-id').value=id;
+  document.getElementById('status-card-name').value=[c.player||c.desc, c.origGrader?`(${c.origGrader} ${c.origGrade} slab)`:''].filter(Boolean).join(' ');
+  document.getElementById('status-new').value=c.status;
+  document.getElementById('status-psa-fee').value=c.psaFee||'';
+  document.getElementById('status-ship-psa').value=c.shipPsa||'';
+  document.getElementById('status-psa-grade').value=c.psaGrade||'';
+  document.getElementById('status-pregrade').value=c.preGrade||'';
+  document.getElementById('status-ship-dc').value=c.shipDc||'';
+  document.getElementById('status-dc-commission').value=c.dcCommission||15;
+  document.getElementById('status-est-value').value=c.estValue||'';
+  document.getElementById('status-notes').value=c.notes||'';
+  updateStatusModalFields();
+  document.getElementById('modal-status').classList.add('open');
+}
+function updateStatusModalFields() {
+  const s=document.getElementById('status-new').value;
+  document.getElementById('status-psa-fields').style.display=s==='At PSA (grading)'?'block':'none';
+  document.getElementById('status-dc-fields').style.display=s==='At DC Sports (consignment)'?'block':'none';
+  const cardId=document.getElementById('status-id').value;
+  const card=cards.find(x=>x.id===cardId);
+  const rn=document.getElementById('status-regrade-note');
+
+  // Show regrade panel if: card has a PSA grade already (PSA→PSA regrade)
+  // OR card was a previously graded slab from another company
+  const hasPsaGrade = card && card.psaGrade;
+  const wasOtherGraderSlab = card && card.origGrader && card.origGrader !== 'PSA' && card.status === 'Just purchased - graded';
+
+  if (s === 'At PSA (grading)' && (hasPsaGrade || wasOtherGraderSlab)) {
+    rn.style.display = 'block';
+    if (hasPsaGrade) {
+      document.getElementById('status-regrade-desc').textContent = 'Current PSA slab will be cracked and resubmitted. The old PSA grade will be saved in the card history.';
+      document.getElementById('status-orig-grader-display').value = 'PSA';
+      document.getElementById('status-orig-grade-display').value = `PSA ${card.psaGrade}`;
+    } else {
+      document.getElementById('status-regrade-desc').textContent = 'Original slab will be cracked. Original grade is preserved in history.';
+      document.getElementById('status-orig-grader-display').value = card.origGrader || '—';
+      document.getElementById('status-orig-grade-display').value = card.origGrade ? `${card.origGrader} ${card.origGrade}` : '—';
+    }
+  } else {
+    rn.style.display = 'none';
+  }
+}
+function confirmStatusUpdate() {
+  const id=document.getElementById('status-id').value;
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  const s=document.getElementById('status-new').value;
+  const prev=c.status; c.status=s;
+
+  // Cracking a previously-graded slab from another company
+  if (s==='At PSA (grading)' && c.origGrader && c.origGrader!=='PSA' && prev==='Just purchased - graded') {
+    c.cracked=true; c.crackedDate=new Date().toISOString().split('T')[0];
+  }
+
+  // Cracking a returned PSA grade to resubmit (disagree with grade)
+  if (s==='At PSA (grading)' && c.psaGrade) {
+    // Save regrade history
+    if (!c.regradeHistory) c.regradeHistory = [];
+    c.regradeHistory.push({ grade: c.psaGrade, preGrade: c.preGrade||'', crackedDate: new Date().toISOString().split('T')[0] });
+    c.psaGrade = ''; // clear — pending new grade
+    c.preGrade = ''; // clear old prediction
+    c.cracked = true;
+    c.crackedDate = new Date().toISOString().split('T')[0];
+  }
+
+  if (s==='At PSA (grading)') {
+    const fee=parseFloat(document.getElementById('status-psa-fee').value)||0;
+    const ship=parseFloat(document.getElementById('status-ship-psa').value)||0;
+    if (fee) c.psaFee = (c.psaFee||0) + fee;
+    if (ship) c.shipPsa = (c.shipPsa||0) + ship;
+    c.psaGrade=document.getElementById('status-psa-grade').value;
+    const pg=document.getElementById('status-pregrade').value;
+    if (pg) c.preGrade=pg;
+  }
+  if (s==='At DC Sports (consignment)') {
+    const ship=parseFloat(document.getElementById('status-ship-dc').value)||0;
+    if (ship&&!c.shipDc) c.shipDc=ship;
+    c.dcCommission=parseFloat(document.getElementById('status-dc-commission').value)||15;
+  }
+  const ev=parseFloat(document.getElementById('status-est-value').value)||0;
+  if (ev) c.estValue=ev;
+  c.notes=document.getElementById('status-notes').value;
+  save(); closeModal('modal-status'); renderAll();
+}
+
+function deleteCard(id) {
+  if (!confirm('Delete this card? This cannot be undone.')) return;
+  cards=cards.filter(x=>x.id!==id); selectedIds.delete(id); save(); renderAll();
+}
+
+// ---- BULK SELECTION ----
+function toggleCardSelect(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+  // update select-all state
+  const allVisible = [...document.querySelectorAll('.inv-row-cb')].map(cb=>cb.dataset.id);
+  const allChecked = allVisible.length > 0 && allVisible.every(id => selectedIds.has(id));
+  document.getElementById('inv-select-all').indeterminate = !allChecked && selectedIds.size > 0;
+  document.getElementById('inv-select-all').checked = allChecked;
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.inv-row-cb').forEach(el => {
+    if (cb.checked) selectedIds.add(el.dataset.id); else selectedIds.delete(el.dataset.id);
+  });
+  updateBulkBar();
+  renderInventory();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-action-bar');
+  const count = document.getElementById('bulk-count');
+  if (selectedIds.size > 0) {
+    bar.style.display = 'flex';
+    count.textContent = `${selectedIds.size} card${selectedIds.size>1?'s':''} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearBulkSelection() {
+  selectedIds.clear();
+  updateBulkBar();
+  renderInventory();
+}
+
+// ---- PSA ORDER ----
+function openPsaOrderModal() {
+  const selected = cards.filter(c => selectedIds.has(c.id));
+  if (!selected.length) return;
+  document.getElementById('psa-order-number').value = '';
+  document.getElementById('psa-order-fee').value = '';
+  document.getElementById('psa-order-ship').value = '';
+  document.getElementById('psa-order-level').value = 'Economy';
+  document.getElementById('psa-order-pregrade').value = '';
+  document.getElementById('psa-order-card-count').textContent = `${selected.length} card${selected.length>1?'s':''} selected for this order`;
+  document.getElementById('psa-order-card-list').innerHTML = selected.map(c =>
+    `<span style="color:var(--text)">${c.player||c.desc||'—'}</span>${c.year?' · '+c.year:''} ${c.brand||''} ${c.set||''} ${c.subset||''}`
+  ).join('<br>');
+  document.getElementById('modal-psa-order').classList.add('open');
+}
+
+function confirmPsaOrder() {
+  const orderNum = document.getElementById('psa-order-number').value.trim();
+  if (!orderNum) { alert('Please enter a PSA order number.'); return; }
+  const fee = parseFloat(document.getElementById('psa-order-fee').value)||0;
+  const ship = parseFloat(document.getElementById('psa-order-ship').value)||0;
+  const level = document.getElementById('psa-order-level').value;
+  const preGrade = document.getElementById('psa-order-pregrade').value;
+  const selected = cards.filter(c => selectedIds.has(c.id));
+  selected.forEach(c => {
+    c.status = 'At PSA (grading)';
+    c.psaOrderNum = orderNum;
+    c.psaLevel = level;
+    if (fee) c.psaFee = (c.psaFee||0) + fee;
+    if (ship) c.shipPsa = (c.shipPsa||0) + (ship / selected.length); // split shipping across cards
+    if (preGrade) c.preGrade = preGrade;
+    c.psaGrade = c.psaGrade || '';
+  });
+  selectedIds.clear();
+  save();
+  closeModal('modal-psa-order');
+  updateBulkBar();
+  renderAll();
+  // Switch to PSA orders tab
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-view').forEach(el=>el.classList.remove('active'));
+  document.querySelector('.tab[onclick*="psa-orders"]').classList.add('active');
+  document.getElementById('panel-psa-orders').classList.add('active');
+  renderPsaOrders();
+}
+
+// ---- RENDER ----
+function renderAll() { renderInventory(); renderDash(); renderHeader(); }
+
+function renderPsaOrders() {
+  const psaCards = cards.filter(c => c.status === 'At PSA (grading)');
+  const content = document.getElementById('psa-orders-content');
+  const empty = document.getElementById('psa-orders-empty');
+  if (!psaCards.length) { content.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  // Group by order number
+  const groups = {};
+  psaCards.forEach(c => {
+    const key = c.psaOrderNum || '(No Order #)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+
+  content.innerHTML = Object.entries(groups).map(([orderNum, grp], gi) => {
+    const totalCostGrp = grp.reduce((a,c)=>a+totalCost(c),0);
+    const graded = grp.filter(c=>c.psaGrade).length;
+    const pending = grp.length - graded;
+    const level = grp[0].psaLevel || '';
+    const statusSummary = pending > 0
+      ? `<span style="color:var(--muted)">${pending} pending</span>${graded?` · <span style="color:var(--accent2)">${graded} graded</span>`:''}` 
+      : `<span style="color:var(--accent2)">All ${graded} graded ✓</span>`;
+
+    const rows = grp.map(c => {
+      const regradeNote = c.regradeHistory&&c.regradeHistory.length ? ` <span style="font-size:10px;color:var(--muted)">(regrade #${c.regradeHistory.length+1})</span>` : '';
+      const gradeCell = c.psaGrade
+        ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
+        : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
+      return `<tr>
+        <td><strong>${c.player||c.desc||'—'}</strong></td>
+        <td class="mono" style="color:var(--muted)">${c.year||'—'}</td>
+        <td style="color:var(--muted)">${c.brand||'—'}</td>
+        <td>${c.set||'—'}</td>
+        <td style="color:var(--muted);font-size:12px">${c.subset||'—'}</td>
+        <td class="mono" style="color:var(--muted)">${c.cardnum||'—'}</td>
+        <td class="mono">${fmt(totalCost(c))}</td>
+        <td>${gradeCell}${regradeNote}</td>
+        <td><div class="action-row">
+          <button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
+          <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="roi-panel" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('og-${gi}')">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:var(--accent)">ORDER #${orderNum}</span>
+          ${level?`<span class="badge badge-purchased">${level}</span>`:''}
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''} · ${fmt(totalCostGrp)}</span>
+          <span style="font-family:var(--font-mono);font-size:11px">${statusSummary}</span>
+        </div>
+        <span id="og-${gi}-arrow" style="color:var(--muted);font-size:16px">▼</span>
+      </div>
+      <div id="og-${gi}" style="margin-top:14px">
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr>
+            <th>Player</th><th>Year</th><th>Brand</th><th>Set</th><th>Subset</th><th>#</th><th>Cost Basis</th><th>Grade</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleOrderGroup(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id+'-arrow');
+  if (!el) return;
+  const collapsed = el.style.display === 'none';
+  el.style.display = collapsed ? 'block' : 'none';
+  arrow.textContent = collapsed ? '▼' : '▶';
+}
+
+function renderInventory() {
+  const search=document.getElementById('inv-search').value.toLowerCase();
+  const sf=document.getElementById('inv-status-filter').value;
+  let filtered=cards.filter(c=>c.status!=='Sold').filter(c=>{
+    const s=[c.player,c.desc,c.brand,c.set,c.subset,c.cardnum,c.year].filter(Boolean).join(' ').toLowerCase();
+    return (!search||s.includes(search))&&(!sf||c.status===sf);
+  });
+  filtered.sort((a,b)=>{ const av=cardSortVal(a,invSort.key),bv=cardSortVal(b,invSort.key); return av<bv?(invSort.dir==='asc'?-1:1):av>bv?(invSort.dir==='asc'?1:-1):0; });
+  applySortHeaders('panel-inventory',invSort);
+  const tbody=document.getElementById('inv-tbody'), empty=document.getElementById('inv-empty');
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML=filtered.map(c=>{
+    const cost=totalCost(c), ev=c.estValue, unr=ev?ev-cost:null, unrPct=ev&&cost?((ev-cost)/cost*100):null;
+    const name=c.player||c.desc||'—';
+    const regradeNote = c.regradeHistory && c.regradeHistory.length ? `<br><span style="font-size:10px;color:var(--muted)">regrade #${c.regradeHistory.length+1}</span>` : '';
+    const preGradeNote = !c.psaGrade && c.preGrade ? `<br><span style="font-size:10px;color:var(--accent);opacity:0.8" title="Your pre-grade prediction">✦ pred. ${c.preGrade}</span>` : '';
+    const gradeCell = c.psaGrade
+      ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${regradeNote}${c.preGrade ? `<br><span style="font-size:10px;color:var(--muted)" title="Your prediction was ${c.preGrade}">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>` : ''}`
+      : c.origGrader && c.origGrade
+        ? `<span class="badge badge-graded-in">${c.origGrader} ${c.origGrade}</span>`
+        : preGradeNote || '—';
+    return `<tr>
+      <td><input type="checkbox" class="inv-row-cb" data-id="${c.id}" ${selectedIds.has(c.id)?'checked':''} onchange="toggleCardSelect('${c.id}',this.checked)"></td>
+      <td><strong>${name}</strong>${c.desc?`<br><span style="color:var(--muted);font-size:11px">${c.desc}</span>`:''}</td>
+      <td class="mono" style="color:var(--muted)">${c.year||'—'}</td>
+      <td style="color:var(--muted)">${c.brand||'—'}</td>
+      <td>${c.set||'—'}</td>
+      <td style="color:var(--muted);font-size:12px">${c.subset||'—'}</td>
+      <td class="mono" style="color:var(--muted)">${c.cardnum||'—'}</td>
+      <td class="mono" style="color:var(--muted)">${c.buyDate}</td>
+      <td class="mono">${fmt(c.buyPrice)}</td>
+      <td class="mono" style="color:var(--muted)">${fmt(cost-c.buyPrice)}</td>
+      <td class="mono"><strong>${fmt(cost)}</strong></td>
+      <td>${gradeCell}</td>
+      <td>${statusBadge(c.status,c)}${c.psaOrderNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">Order #${c.psaOrderNum}</span>`:''}</td>
+      <td class="mono">${ev?fmt(ev):'—'}</td>
+      <td class="mono ${unr!==null?roiClass(unr):''}">${unr!==null?fmt(unr)+(unrPct!==null?` <span style="font-size:11px">(${fmtPct(unrPct)})</span>`:''):'—'}</td>
+      <td><div class="action-row">
+        <button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
+        <button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
+        <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>
+        <button class="btn btn-danger" onclick="deleteCard('${c.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSold() {
+  let sold=cards.filter(c=>c.status==='Sold');
+  sold.sort((a,b)=>{ const av=cardSortVal(a,soldSort.key),bv=cardSortVal(b,soldSort.key); return av<bv?(soldSort.dir==='asc'?-1:1):av>bv?(soldSort.dir==='asc'?1:-1):0; });
+  applySortHeaders('panel-sold',soldSort);
+  const tbody=document.getElementById('sold-tbody'), empty=document.getElementById('sold-empty');
+  if (!sold.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML=sold.map(c=>{
+    const cost=totalCost(c), net=netProceeds(c), profit=net-cost, roi=calcROI(c), annRoi=calcAnnualROI(c), days=daysHeld(c);
+    const name=c.player||c.desc||'—';
+    const gradeBadge=c.psaGrade?` <span class="badge badge-psa">PSA ${c.psaGrade}</span>`:c.origGrader&&c.origGrade&&!c.cracked?` <span class="badge badge-graded-in">${c.origGrader} ${c.origGrade}</span>`:c.cracked?` <span class="badge badge-regrade">cracked ${c.origGrader} ${c.origGrade}</span>`:'';
+    return `<tr>
+      <td><strong>${name}</strong>${gradeBadge}${c.desc?`<br><span style="color:var(--muted);font-size:11px">${c.desc}</span>`:''}</td>
+      <td class="mono" style="color:var(--muted)">${c.year||'—'}</td>
+      <td style="color:var(--muted)">${[c.brand,c.set].filter(Boolean).join(' ')||'—'}</td>
+      <td style="color:var(--muted);font-size:12px">${c.subset||'—'}</td>
+      <td class="mono" style="color:var(--muted)">${c.buyDate}</td>
+      <td class="mono" style="color:var(--muted)">${c.saleDate}</td>
+      <td class="mono">${fmt(cost)}</td>
+      <td class="mono">${fmt(c.salePrice)}</td>
+      <td class="mono" style="color:var(--muted)">${fmt((parseFloat(c.saleFees)||0)+(parseFloat(c.saleShip)||0))}</td>
+      <td class="mono">${fmt(net)}</td>
+      <td class="mono ${roiClass(profit)}">${fmt(profit)}</td>
+      <td class="mono ${roiClass(roi)}">${fmtPct(roi)}</td>
+      <td class="mono" style="color:var(--muted)">${days}d</td>
+      <td><button class="btn btn-danger" onclick="deleteCard('${c.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderDash() {
+  const atPsa=cards.filter(c=>c.status==='At PSA (grading)').length;
+  const gradedSlabs=cards.filter(c=>c.status==='Just purchased - graded').length;
+  const sold=cards.filter(c=>c.status==='Sold');
+  const soldRev=sold.reduce((a,c)=>a+(parseFloat(c.salePrice)||0),0);
+  document.getElementById('dash-total').textContent=cards.length;
+  document.getElementById('dash-psa').textContent=atPsa;
+  document.getElementById('dash-psa-sub').textContent=gradedSlabs?`awaiting grade · ${gradedSlabs} slab${gradedSlabs>1?'s':''} pending`:'awaiting grade';
+  document.getElementById('dash-consign').textContent=cards.filter(c=>c.status==='At DC Sports (consignment)').length;
+  document.getElementById('dash-personal').textContent=cards.filter(c=>c.status==='Personal collection').length;
+  const vaultHolding=cards.filter(c=>c.status==='Holding - PSA Vault').length;
+  const vaultSale=cards.filter(c=>c.status==='Holding - PSA Vault (For Sale)').length;
+  document.getElementById('dash-vault').textContent=vaultHolding+vaultSale;
+  document.getElementById('dash-vault-sub').textContent=vaultSale>0?`${vaultHolding} holding · ${vaultSale} for sale`:'stored at PSA';
+  document.getElementById('dash-sold').textContent=sold.length;
+  document.getElementById('dash-sold-sub').textContent=fmt(soldRev)+' revenue';
+}
+
+function renderHeader() {
+  const sold=cards.filter(c=>c.status==='Sold');
+  const totalInvested=cards.reduce((a,c)=>a+totalCost(c),0);
+  const totalProfit=sold.reduce((a,c)=>a+(netProceeds(c)-totalCost(c)),0);
+  const active=cards.filter(c=>c.status!=='Sold'&&c.status!=='Personal collection');
+  let annROI=NaN;
+  if (sold.length) {
+    const ws=sold.reduce((a,c)=>{ const cost=totalCost(c),ar=calcAnnualROI(c); return isNaN(ar)?a:a+ar*cost; },0);
+    const tc=sold.reduce((a,c)=>a+totalCost(c),0);
+    annROI=tc?ws/tc:NaN;
+  }
+  document.getElementById('hdr-roi').textContent=isNaN(annROI)?'—':fmtPct(annROI)+'/yr';
+  document.getElementById('hdr-roi').className='hstat-value '+(isNaN(annROI)?'neutral':roiClass(annROI));
+  document.getElementById('hdr-invested').textContent=fmt(totalInvested);
+  document.getElementById('hdr-profit').textContent=fmt(totalProfit);
+  document.getElementById('hdr-profit').className='hstat-value '+roiClass(totalProfit);
+  document.getElementById('hdr-inventory').textContent=active.length+' cards';
+}
+
+function renderROI() {
+  const sold=cards.filter(c=>c.status==='Sold');
+  const revenue=sold.reduce((a,c)=>a+(parseFloat(c.salePrice)||0),0);
+  const costBasis=sold.reduce((a,c)=>a+totalCost(c),0);
+  const saleFees=sold.reduce((a,c)=>a+(parseFloat(c.saleFees)||0)+(parseFloat(c.saleShip)||0),0);
+  const net=sold.reduce((a,c)=>a+netProceeds(c),0);
+  const profit=net-costBasis, roi=costBasis?(profit/costBasis*100):NaN;
+  let annROI=NaN;
+  if (sold.length) {
+    const ws=sold.reduce((a,c)=>{ const cost=totalCost(c),ar=calcAnnualROI(c); return isNaN(ar)?a:a+ar*cost; },0);
+    const tc=sold.reduce((a,c)=>a+totalCost(c),0);
+    annROI=tc?ws/tc:NaN;
+  }
+  document.getElementById('roi-revenue').textContent=fmt(revenue);
+  document.getElementById('roi-cost').textContent=fmt(costBasis);
+  document.getElementById('roi-sale-fees').textContent=fmt(saleFees);
+  const np=document.getElementById('roi-net'); np.textContent=fmt(profit); np.className='breakdown-value mono '+roiClass(profit);
+  const rp=document.getElementById('roi-pct'); rp.textContent=fmtPct(roi); rp.className='breakdown-value mono '+roiClass(roi);
+  const ra=document.getElementById('roi-annual'); ra.textContent=isNaN(annROI)?'—':fmtPct(annROI)+'/yr'; ra.className='breakdown-value mono '+roiClass(annROI);
+  const byStatus=s=>cards.filter(c=>c.status===s).reduce((a,c)=>a+totalCost(c),0);
+  document.getElementById('roi-inv-cost').textContent=fmt(byStatus('Just purchased'));
+  document.getElementById('roi-graded-cost').textContent=fmt(byStatus('Just purchased - graded'));
+  document.getElementById('roi-psa-cost').textContent=fmt(byStatus('At PSA (grading)'));
+  document.getElementById('roi-dc-cost').textContent=fmt(byStatus('At DC Sports (consignment)'));
+  document.getElementById('roi-vault-cost').textContent=fmt(byStatus('Holding - PSA Vault')+byStatus('Holding - PSA Vault (For Sale)'));
+  document.getElementById('roi-pers-cost').textContent=fmt(byStatus('Personal collection'));
+  document.getElementById('roi-total-capital').textContent=fmt(cards.filter(c=>c.status!=='Sold').reduce((a,c)=>a+totalCost(c),0));
+  const tbody=document.getElementById('roi-tbody'), empty=document.getElementById('roi-empty');
+  if (!sold.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML=sold.map(c=>{
+    const cost=totalCost(c),net=netProceeds(c),profit=net-cost,roi=calcROI(c),annR=calcAnnualROI(c),days=daysHeld(c);
+    const name=c.player||c.desc||'—';
+    return `<tr>
+      <td>${name}${c.psaGrade?` <span class="badge badge-psa">PSA ${c.psaGrade}</span>`:''}</td>
+      <td class="mono">${fmt(cost)}</td><td class="mono">${fmt(net)}</td>
+      <td class="mono ${roiClass(profit)}">${fmt(profit)}</td>
+      <td class="mono ${roiClass(roi)}">${fmtPct(roi)}</td>
+      <td class="mono ${roiClass(annR)}">${fmtPct(annR)}</td>
+      <td class="mono" style="color:var(--muted)">${days}d</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- IMPORT ----
+let importRows = [];
+
+function handleFileImport(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>parseImportText(e.target.result, file.name);
+  reader.readAsText(file);
+  input.value='';
+}
+function handlePasteImport() {
+  const text=document.getElementById('import-paste').value.trim();
+  if (!text) { alert('Please paste some data first.'); return; }
+  parseImportText(text,'pasted');
+}
+function parseImportText(text, source) {
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if (!lines.length) { alert('No data found.'); return; }
+  let rows=[];
+  const firstLine=lines[0];
+  const isCSV=firstLine.includes(',')||firstLine.includes('\t');
+  if (isCSV) {
+    const delim=firstLine.includes('\t')?'\t':',';
+    const headers=splitCSVLine(lines[0],delim).map(h=>h.toLowerCase().trim().replace(/['"]/g,''));
+    const colMap={ date:findCol(headers,['date','order date','purchase date','transaction date']),
+      title:findCol(headers,['title','item title','item','description','item description','product description']),
+      price:findCol(headers,['price','item price','total','order total','amount','cost','subtotal','sub total']),
+      shipping:findCol(headers,['shipping','shipping cost','shipping & handling','s&h','postage']) };
+    for (let i=1;i<lines.length;i++) {
+      const cols=splitCSVLine(lines[i],delim);
+      if (!cols.length||cols.every(c=>!c.trim())) continue;
+      const title=colMap.title>=0?cleanStr(cols[colMap.title]):'';
+      const price=colMap.price>=0?parsePrice(cols[colMap.price]):0;
+      const date=colMap.date>=0?parseDate(cols[colMap.date]):'';
+      const shipping=colMap.shipping>=0?parsePrice(cols[colMap.shipping]):0;
+      if (!title&&!price) continue;
+      rows.push({rawTitle:title,date,price,shipping});
+    }
+  } else { rows=parseEbayFreeText(lines); }
+  if (!rows.length) { alert('Could not parse any purchases. Try the paste method and copy directly from eBay Purchase History.'); return; }
+  importRows=rows.map((r,i)=>({_idx:i,checked:true,rawTitle:r.rawTitle||'',
+    date:r.date||new Date().toISOString().split('T')[0],price:r.price||0,shipping:r.shipping||0,
+    ...parseCardTitle(r.rawTitle||''),status:'Just purchased'}));
+  renderImportPreview();
+}
+function parseEbayFreeText(lines) {
+  const rows=[], dateRe=/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b/i;
+  const priceRe=/\$[\d,]+\.?\d{0,2}/, yearRe=/\b(19|20)\d{2}\b/;
+  let i=0;
+  while(i<lines.length) {
+    const line=lines[i];
+    if (line.length<4||/^(my ebay|purchase history|order|feedback|watchlist|messages|notifications|sign|log|home|help|contact)/i.test(line)) { i++; continue; }
+    const priceMatch=line.match(priceRe);
+    const looksLikeCard=yearRe.test(line)||/\b(rc|rookie|auto|psa|bgs|chrome|topps|bowman|panini|upper deck|prizm|select|optic|refractor|parallel|gold|silver|holo|sgc|graded|card)\b/i.test(line);
+    if (looksLikeCard&&line.length>10) {
+      const row={rawTitle:line,date:'',price:0,shipping:0};
+      for(let j=Math.max(0,i-3);j<=Math.min(lines.length-1,i+3);j++){
+        if(j===i) continue;
+        const nearby=lines[j];
+        if(!row.date){const dm=nearby.match(dateRe);if(dm)row.date=parseDate(dm[0]);}
+        if(!row.price){const pm=nearby.match(priceRe);if(pm)row.price=parsePrice(pm[0]);}
+      }
+      rows.push(row); i++;
+    } else if(priceMatch&&rows.length) {
+      if(!rows[rows.length-1].price) rows[rows.length-1].price=parsePrice(priceMatch[0]); i++;
+    } else { i++; }
+  }
+  return rows;
+}
+function parseCardTitle(title) {
+  const out={player:'',year:'',brand:'',set:'',subset:'',cardnum:'',desc:title};
+  if(!title) return out;
+  const yearM=title.match(/\b(19[5-9]\d|20[0-2]\d)\b/); if(yearM) out.year=yearM[1];
+  const numM=title.match(/#\s*(\d+[A-Za-z]?)|card\s*#?\s*(\d+)/i); if(numM) out.cardnum='#'+(numM[1]||numM[2]);
+  const brands=['Topps','Bowman','Panini','Upper Deck','Fleer','Donruss','Score','Leaf','SP','SPx','SkyBox','Stadium Club','Heritage','Archives','Chrome','Prizm','Select','Optic','Mosaic','Contenders','National Treasures','Immaculate','Finest','Ultra'];
+  for(const b of brands){if(new RegExp('\\b'+b+'\\b','i').test(title)){out.brand=b;break;}}
+  const subsets=['Refractor','Gold','Silver','Blue','Red','Orange','Purple','Green','Black','White','Holo','Auto','Autograph','RC','Rookie','Patch','Relic','Jersey','Numbered','SP','SSP','Chrome','Xfractor','Wave','Atomic'];
+  const foundSubs=subsets.filter(s=>new RegExp('\\b'+s+'\\b','i').test(title));
+  if(foundSubs.length) out.subset=foundSubs.join(' ');
+  const skipWords=new Set([...brands.map(b=>b.toLowerCase()),...subsets.map(s=>s.toLowerCase()),'card','baseball','football','basketball','hockey','trading','insert','lot','rookie','auto','psa','bgs','sgc','graded','nm','mt','mint','gem','pack']);
+  const words=title.replace(/#\S+/g,'').split(/\s+/), nameWords=[];
+  for(const w of words){const cl=w.replace(/[^a-zA-Z'-]/g,'');if(cl.length<2||/^\d+$/.test(cl)||skipWords.has(cl.toLowerCase())) continue;if(/^[A-Z][a-z]/.test(cl)) nameWords.push(cl);if(nameWords.length>=3) break;}
+  if(nameWords.length>=1) out.player=nameWords.join(' ');
+  return out;
+}
+function splitCSVLine(line,delim){const result=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ;}else if(ch===delim&&!inQ){result.push(cur);cur='';}else{cur+=ch;}}result.push(cur);return result;}
+function findCol(headers,names){for(const n of names){const i=headers.indexOf(n);if(i>=0) return i;}for(const n of names){const i=headers.findIndex(h=>h.includes(n));if(i>=0) return i;}return -1;}
+function cleanStr(s){return(s||'').replace(/^["']|["']$/g,'').trim();}
+function parsePrice(s){if(!s) return 0;const n=parseFloat((s+'').replace(/[^0-9.]/g,''));return isNaN(n)?0:n;}
+function parseDate(s){if(!s) return '';const d=new Date(s);if(!isNaN(d)) return d.toISOString().split('T')[0];return '';}
+
+function renderImportPreview() {
+  document.getElementById('import-count-label').textContent=importRows.length+' rows found';
+  document.getElementById('import-preview-wrap').style.display='block';
+  document.getElementById('import-tbody').innerHTML=importRows.map((r,i)=>`
+    <tr>
+      <td><input type="checkbox" ${r.checked?'checked':''} onchange="importRows[${i}].checked=this.checked"></td>
+      <td><input type="date" value="${r.date}" style="width:120px" onchange="importRows[${i}].date=this.value"></td>
+      <td style="max-width:160px;font-size:11px;color:var(--muted)">${r.rawTitle.substring(0,70)}${r.rawTitle.length>70?'…':''}</td>
+      <td><input type="text" value="${r.player}" placeholder="Player" style="width:100px" onchange="importRows[${i}].player=this.value"></td>
+      <td><input type="number" value="${r.year}" placeholder="Year" style="width:58px" onchange="importRows[${i}].year=this.value"></td>
+      <td><input type="text" value="${r.brand}" placeholder="Brand" style="width:75px" onchange="importRows[${i}].brand=this.value"></td>
+      <td><input type="text" value="${r.set}" placeholder="Set" style="width:75px" onchange="importRows[${i}].set=this.value"></td>
+      <td><input type="text" value="${r.subset}" placeholder="Subset" style="width:85px" onchange="importRows[${i}].subset=this.value"></td>
+      <td><input type="text" value="${r.cardnum}" placeholder="#" style="width:50px" onchange="importRows[${i}].cardnum=this.value"></td>
+      <td><input type="number" value="${r.price}" step="0.01" min="0" style="width:70px" onchange="importRows[${i}].price=parseFloat(this.value)||0"></td>
+      <td><input type="number" value="${r.shipping}" step="0.01" min="0" style="width:60px" onchange="importRows[${i}].shipping=parseFloat(this.value)||0"></td>
+      <td>
+        <select style="width:125px" onchange="importRows[${i}].status=this.value">
+          <option value="Just purchased" ${r.status==='Just purchased'?'selected':''}>Just Purchased</option>
+          <option value="Just purchased - graded" ${r.status==='Just purchased - graded'?'selected':''}>Graded Slab</option>
+          <option value="At PSA (grading)" ${r.status==='At PSA (grading)'?'selected':''}>At PSA</option>
+          <option value="At DC Sports (consignment)" ${r.status==='At DC Sports (consignment)'?'selected':''}>At DC Sports</option>
+          <option value="Holding - PSA Vault" ${r.status==='Holding - PSA Vault'?'selected':''}>PSA Vault (Holding)</option>
+          <option value="Holding - PSA Vault (For Sale)" ${r.status==='Holding - PSA Vault (For Sale)'?'selected':''}>PSA Vault (For Sale)</option>
+          <option value="Personal collection" ${r.status==='Personal collection'?'selected':''}>Personal Collection</option>
+        </select>
+      </td>
+    </tr>`).join('');
+}
+function toggleAllImportRows(cb){importRows.forEach(r=>r.checked=cb.checked);renderImportPreview();}
+function clearImportPreview(){importRows=[];document.getElementById('import-preview-wrap').style.display='none';document.getElementById('import-paste').value='';}
+function confirmImport() {
+  const toImport=importRows.filter(r=>r.checked);
+  if(!toImport.length){alert('No rows selected.');return;}
+  toImport.forEach(r=>{
+    const displayParts=[r.year,r.brand,r.set,r.subset,r.player,r.cardnum].filter(Boolean);
+    cards.push({id:Date.now().toString()+Math.random().toString(36).slice(2),
+      player:r.player||'',year:r.year||'',brand:r.brand||'',set:r.set||'',subset:r.subset||'',
+      cardnum:r.cardnum||'',desc:r.desc||r.rawTitle||'',displayName:displayParts.join(' ')||r.rawTitle||'',
+      buyDate:r.date||'',buyPrice:r.price||0,buyerFees:0,shipIn:r.shipping||0,
+      psaFee:0,shipPsa:0,psaGrade:'',psaLevel:'',shipDc:0,dcCommission:0,
+      status:r.status||'Just purchased',estValue:0,notes:'Imported from eBay',
+      salePrice:0,saleFees:0,saleShip:0,saleDate:'',salePlatform:''});
+  });
+  save(); clearImportPreview();
+  alert(`✓ Imported ${toImport.length} card${toImport.length===1?'':'s'} successfully!`);
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-view').forEach(el=>el.classList.remove('active'));
+  document.querySelector('.tab').classList.add('active');
+  document.getElementById('panel-inventory').classList.add('active');
+  renderAll();
+}
+
+// close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el) el.classList.remove('open');});
+});
+
+// ---- EXPORTS ----
+function exportCSV() {
+  const inv = cards.filter(c => c.status !== 'Sold');
+  const headers = ['Player','Year','Brand','Set','Subset','Card #','Buy Date','Buy Price','Buyer Fees','Shipping In','PSA Fee','Ship to PSA','Total Cost','PSA Grade','Pre-Grade Prediction','Status','PSA Order #','Est. Value','Notes'];
+  const rows = inv.map(c => [
+    c.player||'', c.year||'', c.brand||'', c.set||'', c.subset||'', c.cardnum||'',
+    c.buyDate||'',
+    c.buyPrice||0, c.buyerFees||0, c.shipIn||0, c.psaFee||0, c.shipPsa||0,
+    totalCost(c).toFixed(2),
+    c.psaGrade||'', c.preGrade||'',
+    c.status||'', c.psaOrderNum||'',
+    c.estValue||'', c.notes||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+
+  const csv = [headers.map(h=>`"${h}"`).join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ogbcards-inventory-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPDF() {
+  const inv = cards.filter(c => c.status !== 'Sold');
+  const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  const totalInvested = inv.reduce((a,c) => a + totalCost(c), 0);
+  const atPsa = inv.filter(c => c.status === 'At PSA (grading)').length;
+  const personal = inv.filter(c => c.status === 'Personal collection').length;
+
+  const statusColor = s => {
+    if (s === 'At PSA (grading)') return '#4a8fe8';
+    if (s === 'At DC Sports (consignment)') return '#c84ae8';
+    if (s.includes('PSA Vault')) return '#4ac8e8';
+    if (s === 'Personal collection') return '#e87e4a';
+    return '#888';
+  };
+
+  const rows = inv.map((c,i) => `
+    <tr style="background:${i%2===0?'#fff':'#f9f9f9'}">
+      <td>${c.player||'—'}</td>
+      <td>${c.year||'—'}</td>
+      <td>${c.brand||'—'}</td>
+      <td>${c.set||'—'} ${c.subset?'· '+c.subset:''}</td>
+      <td>${c.cardnum||'—'}</td>
+      <td>$${Number(c.buyPrice||0).toFixed(2)}</td>
+      <td><strong>$${totalCost(c).toFixed(2)}</strong></td>
+      <td>${c.psaGrade ? 'PSA '+c.psaGrade : c.preGrade ? '✦ '+c.preGrade : '—'}</td>
+      <td><span style="color:${statusColor(c.status)};font-weight:500;font-size:11px">${c.status.replace('Holding - ','').replace('Just purchased','Raw').replace(' (grading)','').replace(' (consignment)','')}</span>${c.psaOrderNum?'<br><span style="font-size:10px;color:#999">#'+c.psaOrderNum+'</span>':''}</td>
+      <td>${c.estValue?'$'+Number(c.estValue).toFixed(2):'—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>OGBcards Inventory — ${date}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 24px; }
+    h1 { font-size: 28px; letter-spacing: 3px; color: #e8c84a; margin: 0; }
+    h1 span { color: #111; }
+    .meta { color: #666; font-size: 11px; margin: 4px 0 18px; }
+    .summary { display: flex; gap: 28px; margin-bottom: 20px; padding: 12px 16px; background: #f5f5f5; border-radius: 6px; }
+    .sitem { text-align: center; }
+    .sitem-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
+    .sitem-value { font-size: 18px; font-weight: bold; color: #111; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #1e2127; color: #e8c84a; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    @media print { body { padding: 12px; } }
+  </style></head><body>
+  <h1>OGB<span>CARDS</span></h1>
+  <div class="meta">Inventory Report · ${date} · ${inv.length} cards</div>
+  <div class="summary">
+    <div class="sitem"><div class="sitem-label">Total Cards</div><div class="sitem-value">${inv.length}</div></div>
+    <div class="sitem"><div class="sitem-label">Total Invested</div><div class="sitem-value">$${totalInvested.toFixed(2)}</div></div>
+    <div class="sitem"><div class="sitem-label">At PSA</div><div class="sitem-value">${atPsa}</div></div>
+    <div class="sitem"><div class="sitem-label">Personal Collection</div><div class="sitem-value">${personal}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th>
+      <th>Buy Price</th><th>Total Cost</th><th>Grade</th><th>Status</th><th>Est. Value</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  // Trigger print dialog after load
+  if (win) win.onload = () => { win.focus(); win.print(); };
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// boot
+loadData();
+</script>
+</body>
+</html>
