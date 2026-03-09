@@ -1655,11 +1655,12 @@ function exportPDF() {
 // Uses Google Identity Services + Drive REST API
 // File is always saved as "ogbcards-data.json" in the root of your Google Drive
 
-const GDRIVE_CLIENT_ID = '142164751275-dmq6pu9acqu4nak0690ci0otot4o757s.apps.googleusercontent.com'; // <-- paste your Google OAuth Client ID here
+const GDRIVE_CLIENT_ID = ''; // <-- paste your Google OAuth Client ID here
 const GDRIVE_FILENAME  = 'ogbcards-data.json';
 const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
 
 let gToken = null;
+let gTokenExpiry = null;
 let gFileId = null; // cached file ID once found/created
 
 function gSetLabel(btn, text, spinning=false) {
@@ -1667,18 +1668,25 @@ function gSetLabel(btn, text, spinning=false) {
   if (el) el.textContent = spinning ? '⏳ ' + text : text;
 }
 
+function gTokenValid() {
+  return gToken && gTokenExpiry && Date.now() < gTokenExpiry;
+}
+
 function gSignIn(callback) {
   if (!GDRIVE_CLIENT_ID) {
     alert('Google Drive is not configured yet.\n\nSee the Setup section in the How to Connect Google Drive instructions below the app, or ask for help.');
     return;
   }
-  if (gToken) { callback(gToken); return; }
+  if (gTokenValid()) { callback(gToken); return; }
+  // Token missing or expired — silently request a fresh one
+  gToken = null;
   google.accounts.oauth2.initTokenClient({
     client_id: GDRIVE_CLIENT_ID,
     scope: GDRIVE_SCOPE,
     callback: (resp) => {
       if (resp.error) { alert('Google sign-in failed: ' + resp.error); return; }
       gToken = resp.access_token;
+      gTokenExpiry = Date.now() + (55 * 60 * 1000); // 55 min (expire early before Google's 60 min)
       callback(gToken);
     }
   }).requestAccessToken();
@@ -1686,13 +1694,16 @@ function gSignIn(callback) {
 
 async function gFindFile(token) {
   if (gFileId) return gFileId;
+  // Search Drive for the file — don't cache null so retries always search fresh
   const q = encodeURIComponent(`name='${GDRIVE_FILENAME}' and trashed=false`);
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive`, {
     headers: { Authorization: 'Bearer ' + token }
   });
   const data = await res.json();
-  gFileId = data.files && data.files.length > 0 ? data.files[0].id : null;
-  return gFileId;
+  if (data.files && data.files.length > 0) {
+    gFileId = data.files[0].id; // only cache when found
+  }
+  return gFileId || null;
 }
 
 async function gDriveSave() {
@@ -1705,11 +1716,12 @@ async function gDriveSave() {
 
       if (fileId) {
         // Update existing file
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, {
           method: 'PATCH',
           headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: blob
         });
+        if (!res.ok) throw new Error('Update failed: ' + res.status);
       } else {
         // Create new file
         const meta = new Blob([JSON.stringify({ name: GDRIVE_FILENAME, mimeType: 'application/json' })], { type: 'application/json' });
@@ -1721,8 +1733,9 @@ async function gDriveSave() {
           headers: { Authorization: 'Bearer ' + token },
           body: form
         });
+        if (!res.ok) throw new Error('Create failed: ' + res.status);
         const created = await res.json();
-        gFileId = created.id;
+        gFileId = created.id; // store so Load can find it immediately
       }
       gSetLabel('gdrive-save-label', '☁ Saved ✓');
       setTimeout(() => gSetLabel('gdrive-save-label', '☁ Save to Drive'), 2500);
