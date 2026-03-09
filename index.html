@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OGBcards</title>
-<script src="https://accounts.google.com/gsi/client" async></script>
-<script src="https://apis.google.com/js/api.js" async></script>
+<script src="https://accounts.google.com/gsi/client"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1655,7 +1654,7 @@ function exportPDF() {
 // Uses Google Identity Services + Drive REST API
 // File is always saved as "ogbcards-data.json" in the root of your Google Drive
 
-const GDRIVE_CLIENT_ID = ''; // <-- paste your Google OAuth Client ID here
+const GDRIVE_CLIENT_ID = '142164751275-dmq6pu9acqu4nak0690ci0otot4o757s.apps.googleusercontent.com';
 const GDRIVE_FILENAME  = 'ogbcards-data.json';
 const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
 
@@ -1677,6 +1676,10 @@ function gSignIn(callback) {
     alert('Google Drive is not configured yet.\n\nSee the Setup section in the How to Connect Google Drive instructions below the app, or ask for help.');
     return;
   }
+  if (typeof google === 'undefined' || !google.accounts) {
+    alert('Google is still loading — please wait a moment and try again.');
+    return;
+  }
   if (gTokenValid()) { callback(gToken); return; }
   // Token missing or expired — silently request a fresh one
   gToken = null;
@@ -1686,7 +1689,7 @@ function gSignIn(callback) {
     callback: (resp) => {
       if (resp.error) { alert('Google sign-in failed: ' + resp.error); return; }
       gToken = resp.access_token;
-      gTokenExpiry = Date.now() + (55 * 60 * 1000); // 55 min (expire early before Google's 60 min)
+      gTokenExpiry = Date.now() + (55 * 60 * 1000);
       callback(gToken);
     }
   }).requestAccessToken();
