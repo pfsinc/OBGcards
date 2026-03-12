@@ -1387,25 +1387,73 @@ function parseImportText(text, source) {
   if (isCSV) {
     const delim=firstLine.includes('\t')?'\t':',';
     const headers=splitCSVLine(lines[0],delim).map(h=>h.toLowerCase().trim().replace(/['"]/g,''));
-    const colMap={ date:findCol(headers,['date','order date','purchase date','transaction date']),
-      title:findCol(headers,['title','item title','item','description','item description','product description']),
-      price:findCol(headers,['price','item price','total','order total','amount','cost','subtotal','sub total']),
-      shipping:findCol(headers,['shipping','shipping cost','shipping & handling','s&h','postage']) };
-    for (let i=1;i<lines.length;i++) {
-      const cols=splitCSVLine(lines[i],delim);
-      if (!cols.length||cols.every(c=>!c.trim())) continue;
-      const title=colMap.title>=0?cleanStr(cols[colMap.title]):'';
-      const price=colMap.price>=0?parsePrice(cols[colMap.price]):0;
-      const date=colMap.date>=0?parseDate(cols[colMap.date]):'';
-      const shipping=colMap.shipping>=0?parsePrice(cols[colMap.shipping]):0;
-      if (!title&&!price) continue;
-      rows.push({rawTitle:title,date,price,shipping});
+
+    // Check if this is a structured OGBcards CSV (has explicit player/brand/set columns)
+    const isStructured = findCol(headers,['player']) >= 0 && findCol(headers,['brand','set']) >= 0;
+
+    if (isStructured) {
+      // Structured import — map columns directly, no guessing
+      const col = name => findCol(headers, Array.isArray(name) ? name : [name]);
+      const cPlayer=col('player'), cYear=col('year'), cBrand=col('brand'), cSet=col(['set','set name']),
+            cSubset=col(['subset','variation','parallel']), cCardnum=col(['card #','card#','cardnum','#']),
+            cPrice=col(['buy price','price','cost']), cDate=col(['buy date','date','purchase date']),
+            cShip=col(['ship in','shipping','shipping in']), cStatus=col('status'),
+            cGrade=col(['psa grade','grade']), cGrader=col(['grader','grading co','grading company','orig grader']),
+            cOrigGrade=col(['orig grade','original grade','previous grade']),
+            cNotes=col('notes'), cEstValue=col(['est value','est. value','estimated value']);
+
+      for (let i=1;i<lines.length;i++) {
+        const c=splitCSVLine(lines[i],delim);
+        if (!c.length||c.every(x=>!x.trim())) continue;
+        const g = idx => idx>=0 ? cleanStr(c[idx]) : '';
+        rows.push({
+          structured: true,
+          player: g(cPlayer), year: g(cYear), brand: g(cBrand), set: g(cSet),
+          subset: g(cSubset), cardnum: g(cCardnum),
+          price: cPrice>=0 ? parsePrice(c[cPrice]) : 0,
+          date: cDate>=0 ? parseDate(c[cDate]) : '',
+          shipping: cShip>=0 ? parsePrice(c[cShip]) : 0,
+          status: g(cStatus) || 'Just purchased',
+          psaGrade: g(cGrade),
+          origGrader: g(cGrader),
+          origGrade: g(cOrigGrade),
+          estValue: cEstValue>=0 ? parsePrice(c[cEstValue]) : 0,
+          notes: g(cNotes),
+          rawTitle: [g(cYear),g(cBrand),g(cSet),g(cSubset),g(cPlayer)].filter(Boolean).join(' '),
+        });
+      }
+    } else {
+      // Legacy eBay-style import
+      const colMap={ date:findCol(headers,['date','order date','purchase date','transaction date']),
+        title:findCol(headers,['title','item title','item','description','item description','product description']),
+        price:findCol(headers,['price','item price','total','order total','amount','cost','subtotal','sub total']),
+        shipping:findCol(headers,['shipping','shipping cost','shipping & handling','s&h','postage']) };
+      for (let i=1;i<lines.length;i++) {
+        const cols=splitCSVLine(lines[i],delim);
+        if (!cols.length||cols.every(c=>!c.trim())) continue;
+        const title=colMap.title>=0?cleanStr(cols[colMap.title]):'';
+        const price=colMap.price>=0?parsePrice(cols[colMap.price]):0;
+        const date=colMap.date>=0?parseDate(cols[colMap.date]):'';
+        const shipping=colMap.shipping>=0?parsePrice(cols[colMap.shipping]):0;
+        if (!title&&!price) continue;
+        rows.push({rawTitle:title,date,price,shipping});
+      }
     }
   } else { rows=parseEbayFreeText(lines); }
   if (!rows.length) { alert('Could not parse any purchases. Try the paste method and copy directly from eBay Purchase History.'); return; }
-  importRows=rows.map((r,i)=>({_idx:i,checked:true,rawTitle:r.rawTitle||'',
-    date:r.date||new Date().toISOString().split('T')[0],price:r.price||0,shipping:r.shipping||0,
-    ...parseCardTitle(r.rawTitle||''),status:'Just purchased'}));
+  importRows=rows.map((r,i)=>{
+    if (r.structured) {
+      return {_idx:i, checked:true, rawTitle:r.rawTitle,
+        player:r.player, year:r.year, brand:r.brand, set:r.set, subset:r.subset, cardnum:r.cardnum,
+        date:r.date||'', price:r.price||0, shipping:r.shipping||0,
+        status:r.status||'Just purchased', psaGrade:r.psaGrade||'',
+        origGrader:r.origGrader||'', origGrade:r.origGrade||'',
+        estValue:r.estValue||0, notes:r.notes||''};
+    }
+    return {_idx:i,checked:true,rawTitle:r.rawTitle||'',
+      date:r.date||new Date().toISOString().split('T')[0],price:r.price||0,shipping:r.shipping||0,
+      ...parseCardTitle(r.rawTitle||''),status:'Just purchased',psaGrade:'',origGrader:'',origGrade:''};
+  });
   renderImportPreview();
 }
 function parseEbayFreeText(lines) {
@@ -1490,12 +1538,19 @@ function confirmImport() {
   if(!toImport.length){alert('No rows selected.');return;}
   toImport.forEach(r=>{
     const displayParts=[r.year,r.brand,r.set,r.subset,r.player,r.cardnum].filter(Boolean);
+    const isGraded = r.status==='Just purchased - graded' || r.psaGrade || r.origGrader;
     cards.push({id:Date.now().toString()+Math.random().toString(36).slice(2),
       player:r.player||'',year:r.year||'',brand:r.brand||'',set:r.set||'',subset:r.subset||'',
       cardnum:r.cardnum||'',desc:r.desc||r.rawTitle||'',displayName:displayParts.join(' ')||r.rawTitle||'',
       buyDate:r.date||'',buyPrice:r.price||0,buyerFees:0,shipIn:r.shipping||0,
-      psaFee:0,shipPsa:0,psaGrade:'',psaLevel:'',shipDc:0,dcCommission:0,
-      status:r.status||'Just purchased',estValue:0,notes:'Imported from eBay',
+      psaFee:0,shipPsa:0,
+      psaGrade:r.psaGrade||'',psaLevel:'',
+      origGrader:r.origGrader||'',origGrade:r.origGrade||'',
+      cardType: isGraded ? 'pregraded' : 'raw',
+      shipDc:0,dcCommission:0,
+      status:r.status||'Just purchased',
+      estValue:r.estValue||0,
+      notes:r.notes||'',
       salePrice:0,saleFees:0,saleShip:0,saleDate:'',salePlatform:''});
   });
   save(); clearImportPreview();
