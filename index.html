@@ -1400,6 +1400,9 @@ function parseImportText(text, source) {
             cShip=col(['ship in','shipping','shipping in']), cStatus=col('status'),
             cGrade=col(['psa grade','grade']), cGrader=col(['grader','grading co','grading company','orig grader']),
             cOrigGrade=col(['orig grade','original grade','previous grade']),
+            cSalePrice=col(['sale price','net price']), cSaleDate=col(['sale date']),
+            cSaleFees=col(['sale fees']), cSaleShip=col(['sale ship','ship out']),
+            cSalePlatform=col(['sale platform','platform']),
             cNotes=col('notes'), cEstValue=col(['est value','est. value','estimated value']);
 
       for (let i=1;i<lines.length;i++) {
@@ -1417,6 +1420,11 @@ function parseImportText(text, source) {
           psaGrade: g(cGrade),
           origGrader: g(cGrader),
           origGrade: g(cOrigGrade),
+          salePrice: cSalePrice>=0 ? parsePrice(c[cSalePrice]) : 0,
+          saleDate: cSaleDate>=0 ? parseDate(c[cSaleDate]) : '',
+          saleFees: cSaleFees>=0 ? parsePrice(c[cSaleFees]) : 0,
+          saleShip: cSaleShip>=0 ? parsePrice(c[cSaleShip]) : 0,
+          salePlatform: g(cSalePlatform),
           estValue: cEstValue>=0 ? parsePrice(c[cEstValue]) : 0,
           notes: g(cNotes),
           rawTitle: [g(cYear),g(cBrand),g(cSet),g(cSubset),g(cPlayer)].filter(Boolean).join(' '),
@@ -1448,6 +1456,8 @@ function parseImportText(text, source) {
         date:r.date||'', price:r.price||0, shipping:r.shipping||0,
         status:r.status||'Just purchased', psaGrade:r.psaGrade||'',
         origGrader:r.origGrader||'', origGrade:r.origGrade||'',
+        salePrice:r.salePrice||0, saleDate:r.saleDate||'',
+        saleFees:r.saleFees||0, saleShip:r.saleShip||0, salePlatform:r.salePlatform||'',
         estValue:r.estValue||0, notes:r.notes||''};
     }
     return {_idx:i,checked:true,rawTitle:r.rawTitle||'',
@@ -1551,7 +1561,8 @@ function confirmImport() {
       status:r.status||'Just purchased',
       estValue:r.estValue||0,
       notes:r.notes||'',
-      salePrice:0,saleFees:0,saleShip:0,saleDate:'',salePlatform:''});
+      salePrice:r.salePrice||0, saleFees:r.saleFees||0, saleShip:r.saleShip||0,
+      saleDate:r.saleDate||'', salePlatform:r.salePlatform||''});
   });
   save(); clearImportPreview();
   alert(`✓ Imported ${toImport.length} card${toImport.length===1?'':'s'} successfully!`);
