@@ -45,7 +45,7 @@
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  .main { padding: 24px 28px; max-width: 1500px; margin: 0 auto; }
+  .main { padding: 16px 16px; max-width: 100%; margin: 0 auto; }
 
   .dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
   .dcard { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
@@ -67,10 +67,10 @@
   .btn-small:hover { color: var(--text); }
 
   .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  table { width: 100%; border-collapse: collapse; }
   thead tr { background: var(--surface2); border-bottom: 1px solid var(--border); }
-  th { padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
-  td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  th { padding: 7px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-size: 11px; vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: rgba(255,255,255,0.02); }
   .mono { font-family: var(--font-mono); }
@@ -185,6 +185,7 @@
 <div class="tabs">
   <button class="tab active" onclick="switchTab('inventory',this)">Inventory</button>
   <button class="tab" onclick="switchTab('psa-orders',this)">📦 PSA Orders</button>
+  <button class="tab" onclick="switchTab('dc-orders',this)">🏪 DC Sports Orders</button>
   <button class="tab" onclick="switchTab('sold',this)">Sold</button>
   <button class="tab" onclick="switchTab('roi',this)">ROI Summary</button>
   <button class="tab" onclick="switchTab('import',this)">⬆ Import</button>
@@ -254,6 +255,7 @@
     <div id="bulk-action-bar" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:10px 16px;margin-bottom:12px;display:none;align-items:center;gap:14px;flex-wrap:wrap">
       <span id="bulk-count" style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">0 selected</span>
       <button class="btn btn-primary" style="font-size:11px;padding:6px 14px" onclick="openPsaOrderModal()">📦 Create PSA Order</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:6px 14px;color:#c84ae8;border-color:#c84ae8" onclick="openDcOrderModal()">🏪 Create DC Sports Order</button>
       <button class="btn btn-ghost" style="font-size:11px;padding:6px 14px" onclick="clearBulkSelection()">Clear Selection</button>
     </div>
 
@@ -261,21 +263,18 @@
       <table>
         <thead>
           <tr>
-            <th style="width:36px"><input type="checkbox" id="inv-select-all" onchange="toggleSelectAll(this)" title="Select all visible"></th>
+            <th style="width:28px"><input type="checkbox" id="inv-select-all" onchange="toggleSelectAll(this)" title="Select all visible"></th>
             <th class="sortable" onclick="sortBy('player')">Player</th>
-            <th class="sortable" onclick="sortBy('year')">Year</th>
+            <th class="sortable" onclick="sortBy('year')">Yr</th>
             <th class="sortable" onclick="sortBy('brand')">Brand</th>
-            <th class="sortable" onclick="sortBy('set')">Set</th>
-            <th class="sortable" onclick="sortBy('subset')">Subset</th>
+            <th class="sortable" onclick="sortBy('set')">Set · Subset</th>
             <th class="sortable" onclick="sortBy('cardnum')">#</th>
-            <th class="sortable" onclick="sortBy('buyDate')">Purchased</th>
-            <th class="sortable" onclick="sortBy('buyPrice')">Buy Price</th>
-            <th>Fees</th>
-            <th class="sortable" onclick="sortBy('totalCost')">Total Cost</th>
+            <th class="sortable" onclick="sortBy('buyDate')">Date</th>
+            <th class="sortable" onclick="sortBy('totalCost')">Cost</th>
             <th class="sortable" onclick="sortBy('psaGrade')">Grade</th>
             <th class="sortable" onclick="sortBy('status')">Status</th>
-            <th class="sortable" onclick="sortBy('estValue')">Est. Value</th>
-            <th>Unrealized</th>
+            <th class="sortable" onclick="sortBy('estValue')">Est. Val</th>
+            <th class="sortable" onclick="sortBy('unrealized')">Gain</th>
             <th></th>
           </tr>
         </thead>
@@ -420,6 +419,19 @@
     </div>
   </div>
 
+  <!-- DC SPORTS ORDERS TAB -->
+  <div id="panel-dc-orders" class="panel-view">
+    <div class="section-header">
+      <div class="section-title">DC SPORTS ORDERS</div>
+      <button class="btn btn-primary" onclick="openDcOrderModal()">+ Create DC Sports Order</button>
+    </div>
+    <div id="dc-orders-content"></div>
+    <div id="dc-orders-empty" class="empty-state" style="display:none">
+      <div class="big">🏪</div>
+      <p>No DC Sports orders yet.<br>Select cards in Inventory and use <strong>Create DC Sports Order</strong>, or click the button above.</p>
+    </div>
+  </div>
+
 </div>
 
 <!-- PSA ORDER MODAL -->
@@ -464,6 +476,37 @@
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-psa-order')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmPsaOrder()">Submit Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- DC SPORTS ORDER MODAL -->
+<div class="modal-overlay" id="modal-dc-order">
+  <div class="modal">
+    <div class="modal-title">CREATE DC SPORTS ORDER</div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:18px" id="dc-order-card-count"></p>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Batch / Order Name</label>
+        <input type="text" id="dc-order-number" placeholder="e.g. Batch 1, Jan 2026, Spring Send">
+      </div>
+      <div class="form-group">
+        <label>Shipping to DC Sports ($)</label>
+        <input type="number" id="dc-order-ship" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label>Commission Rate (%)</label>
+        <input type="number" id="dc-order-commission" step="0.1" min="0" max="100" placeholder="e.g. 10">
+      </div>
+      <div class="form-group full">
+        <label>Notes</label>
+        <input type="text" id="dc-order-notes" placeholder="Optional notes for this batch">
+      </div>
+    </div>
+    <div id="dc-order-card-list" style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:200px;overflow-y:auto;font-size:12px;color:var(--muted);line-height:2"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-dc-order')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmDcOrder()">Submit to DC Sports</button>
     </div>
   </div>
 </div>
@@ -804,6 +847,7 @@ function switchTab(t, btn) {
   if (t==='roi') renderROI();
   if (t==='sold') renderSold();
   if (t==='psa-orders') renderPsaOrders();
+  if (t==='dc-orders') renderDcOrders();
 }
 
 // ---- MODALS ----
@@ -1204,6 +1248,124 @@ function toggleOrderGroup(id) {
   arrow.textContent = collapsed ? '▼' : '▶';
 }
 
+// ---- DC SPORTS ORDERS ----
+function openDcOrderModal() {
+  const ids = selectedIds.size > 0 ? [...selectedIds] : [];
+  const eligible = cards.filter(c => ids.includes(c.id) || c.status === 'At DC Sports (consignment)');
+  const forModal = ids.length > 0 ? cards.filter(c => ids.includes(c.id)) : [];
+
+  document.getElementById('dc-order-card-count').textContent =
+    forModal.length > 0 ? `${forModal.length} card${forModal.length>1?'s':''} selected` : 'No cards selected — enter an order name to group existing DC Sports cards, or select cards in Inventory first.';
+  document.getElementById('dc-order-number').value = '';
+  document.getElementById('dc-order-ship').value = '';
+  document.getElementById('dc-order-commission').value = '';
+  document.getElementById('dc-order-notes').value = '';
+  document.getElementById('dc-order-card-list').innerHTML = forModal.length
+    ? forModal.map(c=>`· ${c.player||c.desc||'—'} ${c.year||''} ${c.brand||''} ${c.subset||''}`).join('<br>')
+    : '<span style="color:var(--muted)">No cards selected</span>';
+  document.getElementById('modal-dc-order').classList.add('open');
+}
+
+function confirmDcOrder() {
+  const batchName = document.getElementById('dc-order-number').value.trim();
+  if (!batchName) { alert('Please enter a batch name or order number.'); return; }
+  const ship = parseFloat(document.getElementById('dc-order-ship').value)||0;
+  const commission = parseFloat(document.getElementById('dc-order-commission').value)||0;
+  const notes = document.getElementById('dc-order-notes').value.trim();
+  const ids = [...selectedIds];
+  if (!ids.length) { alert('No cards selected. Select cards in Inventory first.'); return; }
+  const shipPerCard = ids.length ? ship/ids.length : 0;
+  ids.forEach(id => {
+    const c = cards.find(x=>x.id===id);
+    if (!c) return;
+    c.status = 'At DC Sports (consignment)';
+    c.dcBatchNum = batchName;
+    c.dcCommission = commission;
+    c.shipDc = (parseFloat(c.shipDc)||0) + shipPerCard;
+    if (notes) c.notes = notes;
+  });
+  clearBulkSelection();
+  save(); renderAll();
+  closeModal('modal-dc-order');
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-view').forEach(el=>el.classList.remove('active'));
+  document.querySelector('.tab[onclick*="dc-orders"]').classList.add('active');
+  document.getElementById('panel-dc-orders').classList.add('active');
+  renderDcOrders();
+  alert(`✓ ${ids.length} card${ids.length>1?'s':''} sent to DC Sports — Batch "${batchName}"`);
+}
+
+function renderDcOrders() {
+  const dcCards = cards.filter(c => c.status === 'At DC Sports (consignment)' || (c.status === 'Sold' && c.dcBatchNum));
+  const content = document.getElementById('dc-orders-content');
+  const empty = document.getElementById('dc-orders-empty');
+  if (!dcCards.length) { content.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  // Group by batch number
+  const groups = {};
+  dcCards.forEach(c => {
+    const key = c.dcBatchNum || '(No Batch #)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+
+  content.innerHTML = Object.entries(groups).map(([batchNum, grp], gi) => {
+    const totalCostGrp = grp.reduce((a,c)=>a+totalCost(c),0);
+    const sold = grp.filter(c=>c.status==='Sold').length;
+    const active = grp.length - sold;
+    const commission = grp[0].dcCommission || '';
+    const statusSummary = active > 0
+      ? `<span style="color:var(--muted)">${active} active</span>${sold?` · <span style="color:var(--accent2)">${sold} sold</span>`:''}`
+      : `<span style="color:var(--accent2)">All ${sold} sold ✓</span>`;
+
+    const rows = grp.map(c => {
+      const cost = totalCost(c);
+      const net = c.salePrice ? netProceeds(c) : null;
+      const profit = net !== null ? net - cost : null;
+      const statusCell = c.status === 'Sold'
+        ? `<span class="badge badge-sold">Sold</span>${c.saleDate?`<br><span style="font-size:10px;color:var(--muted)">${c.saleDate}</span>`:''}`
+        : `<span class="badge badge-consign">Active</span>`;
+      return `<tr>
+        <td><strong>${c.player||c.desc||'—'}</strong></td>
+        <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
+        <td style="color:var(--muted);font-size:11px">${c.brand||'—'}</td>
+        <td style="font-size:11px">${[c.set,c.subset].filter(Boolean).join(' · ')||'—'}</td>
+        <td class="mono" style="color:var(--muted);font-size:10px">${c.cardnum||'—'}</td>
+        <td class="mono">${fmt(cost)}</td>
+        <td class="mono">${net!==null?fmt(net):'—'}</td>
+        <td class="mono ${profit!==null?roiClass(profit):''}">${profit!==null?fmt(profit):'—'}</td>
+        <td>${statusCell}</td>
+        <td><div class="action-row">
+          <button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
+          ${c.status!=='Sold'?`<button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`:''}
+        </div></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="roi-panel" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('dcog-${gi}')">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:#c84ae8">BATCH: ${batchNum}</span>
+          ${commission?`<span class="badge badge-consign">${commission}% commission</span>`:''}
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''} · ${fmt(totalCostGrp)}</span>
+          <span style="font-family:var(--font-mono);font-size:11px">${statusSummary}</span>
+        </div>
+        <span id="dcog-${gi}-arrow" style="color:var(--muted);font-size:16px">▼</span>
+      </div>
+      <div id="dcog-${gi}" style="margin-top:14px">
+        <div class="table-wrap"><table style="min-width:0">
+          <thead><tr>
+            <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th>
+            <th>Cost</th><th>Net Sale</th><th>Profit</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderInventory() {
   const search=document.getElementById('inv-search').value.toLowerCase();
   const sf=document.getElementById('inv-status-filter').value;
@@ -1219,6 +1381,7 @@ function renderInventory() {
   tbody.innerHTML=filtered.map(c=>{
     const cost=totalCost(c), ev=c.estValue, unr=ev?ev-cost:null, unrPct=ev&&cost?((ev-cost)/cost*100):null;
     const name=c.player||c.desc||'—';
+    const setSubset = [c.set, c.subset].filter(Boolean).join(' · ') || '—';
     const regradeNote = c.regradeHistory && c.regradeHistory.length ? `<br><span style="font-size:10px;color:var(--muted)">regrade #${c.regradeHistory.length+1}</span>` : '';
     const preGradeNote = !c.psaGrade && c.preGrade ? `<br><span style="font-size:10px;color:var(--accent);opacity:0.8" title="Your pre-grade prediction">✦ pred. ${c.preGrade}</span>` : '';
     const gradeCell = c.psaGrade
@@ -1228,20 +1391,17 @@ function renderInventory() {
         : preGradeNote || '—';
     return `<tr>
       <td><input type="checkbox" class="inv-row-cb" data-id="${c.id}" ${selectedIds.has(c.id)?'checked':''} onchange="toggleCardSelect('${c.id}',this.checked)"></td>
-      <td><strong>${name}</strong>${c.desc?`<br><span style="color:var(--muted);font-size:11px">${c.desc}</span>`:''}</td>
-      <td class="mono" style="color:var(--muted)">${c.year||'—'}</td>
-      <td style="color:var(--muted)">${c.brand||'—'}</td>
-      <td>${c.set||'—'}</td>
-      <td style="color:var(--muted);font-size:12px">${c.subset||'—'}</td>
-      <td class="mono" style="color:var(--muted)">${c.cardnum||'—'}</td>
-      <td class="mono" style="color:var(--muted)">${c.buyDate}</td>
-      <td class="mono">${fmt(c.buyPrice)}</td>
-      <td class="mono" style="color:var(--muted)">${fmt(cost-c.buyPrice)}</td>
-      <td class="mono"><strong>${fmt(cost)}</strong></td>
+      <td><strong style="font-size:12px">${name}</strong></td>
+      <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
+      <td style="color:var(--muted);font-size:11px;white-space:nowrap">${c.brand||'—'}</td>
+      <td style="font-size:11px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${setSubset}">${setSubset}</td>
+      <td class="mono" style="color:var(--muted);font-size:10px">${c.cardnum||'—'}</td>
+      <td class="mono" style="color:var(--muted);font-size:10px">${c.buyDate||'—'}</td>
+      <td class="mono" style="font-size:11px"><strong>${fmt(cost)}</strong></td>
       <td>${gradeCell}</td>
-      <td>${statusBadge(c.status,c)}${c.psaOrderNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">Order #${c.psaOrderNum}</span>`:''}</td>
-      <td class="mono">${ev?fmt(ev):'—'}</td>
-      <td class="mono ${unr!==null?roiClass(unr):''}">${unr!==null?fmt(unr)+(unrPct!==null?` <span style="font-size:11px">(${fmtPct(unrPct)})</span>`:''):'—'}</td>
+      <td style="white-space:nowrap">${statusBadge(c.status,c)}${c.psaOrderNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">#${c.psaOrderNum}</span>`:''}${c.dcBatchNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">${c.dcBatchNum}</span>`:''}</td>
+      <td class="mono" style="font-size:11px">${ev?fmt(ev):'—'}</td>
+      <td class="mono ${unr!==null?roiClass(unr):''}" style="font-size:11px">${unr!==null?fmt(unr)+(unrPct!==null?`<br><span style="font-size:10px">${fmtPct(unrPct)}</span>`:''):'—'}</td>
       <td><div class="action-row">
         <button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
         <button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
