@@ -697,6 +697,12 @@
           <div class="form-group"><label>DC Sports Commission %</label><input type="number" id="status-dc-commission" step="0.1" min="0" max="100" placeholder="15"></div>
         </div>
       </div>
+      <div id="status-vault-sale-fields" class="field-group" style="display:none;background:rgba(74,232,160,0.05);border-color:rgba(74,232,160,0.25)">
+        <div class="field-group-title" style="color:#4ae8a0">PSA Vault — For Sale</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group"><label>Asking Price ($)</label><input type="number" id="status-asking-price" step="0.01" min="0" placeholder="0.00"></div>
+        </div>
+      </div>
       <div class="form-group full"><label>Est. Market Value ($)</label><input type="number" id="status-est-value" step="0.01" min="0" placeholder="0.00"></div>
       <div class="form-group full"><label>Notes</label><input type="text" id="status-notes"></div>
     </div>
@@ -1009,6 +1015,7 @@ function openStatusModal(id) {
   document.getElementById('status-dc-commission').value=c.dcCommission||15;
   document.getElementById('status-est-value').value=c.estValue||'';
   document.getElementById('status-notes').value=c.notes||'';
+  document.getElementById('status-asking-price').value=c.askingPrice||'';
   updateStatusModalFields();
   document.getElementById('modal-status').classList.add('open');
 }
@@ -1016,6 +1023,7 @@ function updateStatusModalFields() {
   const s=document.getElementById('status-new').value;
   document.getElementById('status-psa-fields').style.display=s==='At PSA (grading)'?'block':'none';
   document.getElementById('status-dc-fields').style.display=s==='At DC Sports (consignment)'?'block':'none';
+  document.getElementById('status-vault-sale-fields').style.display=s==='Holding - PSA Vault (For Sale)'?'block':'none';
   const cardId=document.getElementById('status-id').value;
   const card=cards.find(x=>x.id===cardId);
   const rn=document.getElementById('status-regrade-note');
@@ -1075,6 +1083,10 @@ function confirmStatusUpdate() {
     const ship=parseFloat(document.getElementById('status-ship-dc').value)||0;
     if (ship&&!c.shipDc) c.shipDc=ship;
     c.dcCommission=parseFloat(document.getElementById('status-dc-commission').value)||15;
+  }
+  if (s==='Holding - PSA Vault (For Sale)') {
+    const ap=parseFloat(document.getElementById('status-asking-price').value)||0;
+    if (ap) c.askingPrice=ap;
   }
   const ev=parseFloat(document.getElementById('status-est-value').value)||0;
   if (ev) c.estValue=ev;
@@ -1201,15 +1213,15 @@ function renderPsaOrders() {
       const gradeCell = c.psaGrade
         ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
         : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
+      const askCell = c.askingPrice ? `<br><span style="font-size:10px;font-family:var(--font-mono);color:#4ae8a0">Ask: ${fmt(c.askingPrice)}</span>` : '';
       return `<tr>
         <td><strong>${c.player||c.desc||'—'}</strong></td>
         <td class="mono" style="color:var(--muted)">${c.year||'—'}</td>
         <td style="color:var(--muted)">${c.brand||'—'}</td>
-        <td>${c.set||'—'}</td>
-        <td style="color:var(--muted);font-size:12px">${c.subset||'—'}</td>
+        <td>${[c.set,c.subset].filter(Boolean).join(' · ')||'—'}</td>
         <td class="mono" style="color:var(--muted)">${c.cardnum||'—'}</td>
         <td class="mono">${fmt(totalCost(c))}</td>
-        <td>${gradeCell}${regradeNote}</td>
+        <td>${gradeCell}${regradeNote}${askCell}</td>
         <td><div class="action-row">
           <button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
           <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>
@@ -1230,7 +1242,7 @@ function renderPsaOrders() {
       <div id="og-${gi}" style="margin-top:14px">
         <div class="table-wrap"><table style="min-width:0">
           <thead><tr>
-            <th>Player</th><th>Year</th><th>Brand</th><th>Set</th><th>Subset</th><th>#</th><th>Cost Basis</th><th>Grade</th><th></th>
+            <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th><th>Cost Basis</th><th>Grade / Ask</th><th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
@@ -1399,7 +1411,7 @@ function renderInventory() {
       <td class="mono" style="color:var(--muted);font-size:10px">${c.buyDate||'—'}</td>
       <td class="mono" style="font-size:11px"><strong>${fmt(cost)}</strong></td>
       <td>${gradeCell}</td>
-      <td style="white-space:nowrap">${statusBadge(c.status,c)}${c.psaOrderNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">#${c.psaOrderNum}</span>`:''}${c.dcBatchNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">${c.dcBatchNum}</span>`:''}</td>
+      <td style="white-space:nowrap">${statusBadge(c.status,c)}${c.psaOrderNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">#${c.psaOrderNum}</span>`:''}${c.dcBatchNum?`<br><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted)">${c.dcBatchNum}</span>`:''}${c.status==='Holding - PSA Vault (For Sale)'&&c.askingPrice?`<br><span style="font-size:10px;font-family:var(--font-mono);color:#4ae8a0">Ask: ${fmt(c.askingPrice)}</span>`:''}</td>
       <td class="mono" style="font-size:11px">${ev?fmt(ev):'—'}</td>
       <td class="mono ${unr!==null?roiClass(unr):''}" style="font-size:11px">${unr!==null?fmt(unr)+(unrPct!==null?`<br><span style="font-size:10px">${fmtPct(unrPct)}</span>`:''):'—'}</td>
       <td><div class="action-row">
