@@ -1231,114 +1231,178 @@ function confirmPsaOrder() {
 // ---- RENDER ----
 function renderAll() { renderInventory(); renderDash(); renderHeader(); }
 
-function renderPsaOrders() {
-  const psaCards = cards.filter(c => c.status === 'At PSA (grading)');
-  const content = document.getElementById('psa-orders-content');
-  const empty = document.getElementById('psa-orders-empty');
-  if (!psaCards.length) { content.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display = 'none';
+function buildOrderGroup(orderNum, grp, gi, isComplete) {
+  const acqCostTotal    = grp.reduce((a,c) => a+cardAcqCost(c), 0);
+  const pendingFees     = grp.reduce((a,c) => a+pendingPsaCost(c), 0);
+  const gradedCostTotal = grp.reduce((a,c) => a+totalCost(c), 0);
+  const graded  = grp.filter(c=>c.psaGrade).length;
+  const pending = grp.length - graded;
+  const level     = grp[0]?.psaLevel || '';
+  const orderData = psaOrders[orderNum] || { notes:[] };
+  const allGraded = pending === 0;
+  const prefix    = isComplete ? 'cog' : 'og';
 
-  const groups = {};
-  psaCards.forEach(c => {
-    const key = c.psaOrderNum || '(No Order #)';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(c);
-  });
-
-  content.innerHTML = Object.entries(groups).map(([orderNum, grp], gi) => {
-    const acqCostTotal = grp.reduce((a,c) => a+cardAcqCost(c), 0);
-    const pendingFees  = grp.reduce((a,c) => a+pendingPsaCost(c), 0);
-    const gradedCostTotal = grp.reduce((a,c) => a+totalCost(c), 0);
-    const graded = grp.filter(c=>c.psaGrade).length;
-    const pending = grp.length - graded;
-    const level = grp[0].psaLevel || '';
-    const orderData = psaOrders[orderNum] || { notes: [] };
-    const allGraded = pending === 0;
-
-    const statusSummary = pending > 0
+  const statusSummary = isComplete
+    ? `<span class="badge badge-psa" style="font-size:10px">✓ Complete</span>`
+    : pending > 0
       ? `<span style="color:var(--muted)">${pending} pending</span>${graded?` · <span style="color:var(--accent2)">${graded} graded</span>`:''}`
       : `<span style="color:var(--accent2)">All ${graded} graded ✓</span>`;
 
-    const rows = grp.map(c => {
-      const acq = cardAcqCost(c);
-      const psaPending = pendingPsaCost(c);
-      const fullCost = totalCost(c);
-      const regradeNote = c.regradeHistory&&c.regradeHistory.length ? ` <span style="font-size:10px;color:var(--muted)">(regrade #${c.regradeHistory.length+1})</span>` : '';
-      const gradeCell = c.psaGrade
-        ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
-        : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
-      const askCell = c.askingPrice ? `<br><span style="font-size:10px;font-family:var(--font-mono);color:#4ae8a0">Ask: ${fmt(c.askingPrice)}</span>` : '';
-      const costCell = c.psaGrade
-        ? `<span class="mono">${fmt(fullCost)}</span>`
-        : `<span class="mono">${fmt(acq)}</span>${psaPending?`<br><span style="font-size:10px;color:var(--muted)" title="PSA fees — pending grade">+${fmt(psaPending)} grading</span>`:''}`;
-      return `<tr>
-        <td><strong>${c.player||c.desc||'—'}</strong></td>
-        <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
-        <td style="color:var(--muted);font-size:11px">${c.brand||'—'}</td>
-        <td style="font-size:11px">${[c.set,c.subset].filter(Boolean).join(' · ')||'—'}</td>
-        <td class="mono" style="color:var(--muted);font-size:10px">${c.cardnum||'—'}</td>
-        <td>${costCell}</td>
-        <td>${gradeCell}${regradeNote}${askCell}</td>
-        <td><div class="action-row">
-          <button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
-          <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>
-        </div></td>
-      </tr>`;
-    }).join('');
-
-    // Cost summary row
-    const costSummary = allGraded
-      ? `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Total cost basis: <strong style="color:var(--text)">${fmt(gradedCostTotal)}</strong></span>`
-      : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Cards invested: <strong style="color:var(--text)">${fmt(acqCostTotal)}</strong></span>
-         <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:14px">Grading fees pending: <strong style="color:var(--accent)">${fmt(pendingFees)}</strong></span>`;
-
-    // Notes timeline
-    const notesList = (orderData.notes||[]).map(n =>
-      `<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);white-space:nowrap;min-width:90px">${n.date}</span>
-        <span style="font-size:12px;color:var(--text)">${n.text}</span>
-      </div>`
-    ).join('');
-
-    return `<div class="roi-panel" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('og-${gi}')">
-        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-          <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:var(--accent)">ORDER #${orderNum}</span>
-          ${level?`<span class="badge badge-purchased">${level}</span>`:''}
-          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''}</span>
-          <span style="font-family:var(--font-mono);font-size:11px">${statusSummary}</span>
-        </div>
-        <span id="og-${gi}-arrow" style="color:var(--muted);font-size:16px">▼</span>
-      </div>
-      <div id="og-${gi}" style="margin-top:14px">
-
-        <!-- Cost summary bar -->
-        <div style="display:flex;align-items:center;gap:20px;padding:10px 14px;background:var(--surface2);border-radius:6px;margin-bottom:12px;flex-wrap:wrap">
-          ${costSummary}
-        </div>
-
-        <!-- Cards table -->
-        <div class="table-wrap" style="margin-bottom:14px"><table style="min-width:0">
-          <thead><tr>
-            <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th><th>Cost</th><th>Grade / Ask</th><th></th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table></div>
-
-        <!-- Notes / Timeline -->
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)">Order Log</span>
-            <button class="btn btn-ghost" style="font-size:10px;padding:3px 10px" onclick="openOrderNoteModal('${orderNum}')">+ Add Note</button>
-          </div>
-          <div id="order-notes-${gi}">
-            ${notesList || '<span style="color:var(--muted);font-size:12px">No notes yet — add updates like shipping dates, QA status, etc.</span>'}
-          </div>
-        </div>
-
-      </div>
-    </div>`;
+  const rows = grp.map(c => {
+    const acq        = cardAcqCost(c);
+    const psaPending = pendingPsaCost(c);
+    const fullCost   = totalCost(c);
+    const regradeNote = c.regradeHistory?.length ? ` <span style="font-size:10px;color:var(--muted)">(regrade #${c.regradeHistory.length+1})</span>` : '';
+    const gradeCell = c.psaGrade
+      ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
+      : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
+    const askCell  = c.askingPrice ? `<br><span style="font-size:10px;font-family:var(--font-mono);color:#4ae8a0">Ask: ${fmt(c.askingPrice)}</span>` : '';
+    const costCell = c.psaGrade
+      ? `<span class="mono">${fmt(fullCost)}</span>`
+      : `<span class="mono">${fmt(acq)}</span>${psaPending?`<br><span style="font-size:10px;color:var(--muted)">+${fmt(psaPending)} grading</span>`:''}`;
+    const actions = isComplete
+      ? `<button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
+         <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`
+      : `<button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
+         <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`;
+    return `<tr>
+      <td><strong>${c.player||c.desc||'—'}</strong></td>
+      <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${c.brand||'—'}</td>
+      <td style="font-size:11px">${[c.set,c.subset].filter(Boolean).join(' · ')||'—'}</td>
+      <td class="mono" style="color:var(--muted);font-size:10px">${c.cardnum||'—'}</td>
+      <td>${costCell}</td>
+      <td>${gradeCell}${regradeNote}${askCell}</td>
+      <td><div class="action-row">${actions}</div></td>
+    </tr>`;
   }).join('');
+
+  const costSummary = allGraded || isComplete
+    ? `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Total cost basis: <strong style="color:var(--text)">${fmt(gradedCostTotal)}</strong></span>`
+    : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Cards invested: <strong style="color:var(--text)">${fmt(acqCostTotal)}</strong></span>
+       <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:14px">Grading fees pending: <strong style="color:var(--accent)">${fmt(pendingFees)}</strong></span>`;
+
+  const notesList = (orderData.notes||[]).map(n =>
+    `<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);white-space:nowrap;min-width:90px">${n.date}</span>
+      <span style="font-size:12px;color:var(--text)">${n.text}</span>
+    </div>`
+  ).join('');
+
+  // Complete button — only on open orders where all cards are graded
+  const completeBtn = !isComplete && allGraded && grp.length > 0
+    ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;border-color:var(--accent2);color:var(--accent2)" onclick="markOrderComplete('${orderNum}')">✓ Mark Order Complete</button>`
+    : isComplete
+      ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markOrderOpen('${orderNum}')">↩ Reopen Order</button>`
+      : '';
+
+  // Default collapsed for completed orders
+  const defaultDisplay = isComplete ? 'none' : 'block';
+  const defaultArrow   = isComplete ? '▶' : '▼';
+
+  return `<div class="roi-panel" style="margin-bottom:14px;${isComplete?'opacity:0.8':''}">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}')">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:${isComplete?'var(--muted)':'var(--accent)'}">ORDER #${orderNum}</span>
+        ${level?`<span class="badge badge-purchased">${level}</span>`:''}
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''}</span>
+        <span style="font-family:var(--font-mono);font-size:11px">${statusSummary}</span>
+        ${orderData.completedDate?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">completed ${orderData.completedDate}</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${completeBtn}
+        <span id="${prefix}-${gi}-arrow" style="color:var(--muted);font-size:16px">${defaultArrow}</span>
+      </div>
+    </div>
+    <div id="${prefix}-${gi}" style="margin-top:14px;display:${defaultDisplay}">
+      <div style="display:flex;align-items:center;gap:20px;padding:10px 14px;background:var(--surface2);border-radius:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${costSummary}
+      </div>
+      <div class="table-wrap" style="margin-bottom:14px"><table style="min-width:0">
+        <thead><tr>
+          <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th><th>Cost</th><th>Grade / Ask</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)">Order Log</span>
+          <button class="btn btn-ghost" style="font-size:10px;padding:3px 10px" onclick="openOrderNoteModal('${orderNum}')">+ Add Note</button>
+        </div>
+        <div>${notesList || '<span style="color:var(--muted);font-size:12px">No notes yet — add updates like shipping dates, QA status, etc.</span>'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPsaOrders() {
+  const content = document.getElementById('psa-orders-content');
+  const empty   = document.getElementById('psa-orders-empty');
+
+  // All cards associated with any PSA order (active or completed)
+  const psaCards = cards.filter(c => c.psaOrderNum);
+  // Also include cards still "At PSA" without an order num
+  const noOrderCards = cards.filter(c => c.status === 'At PSA (grading)' && !c.psaOrderNum);
+
+  if (!psaCards.length && !noOrderCards.length) {
+    content.innerHTML=''; empty.style.display='block'; return;
+  }
+  empty.style.display='none';
+
+  // Build groups
+  const openGroups     = {};
+  const completeGroups = {};
+
+  psaCards.forEach(c => {
+    const key = c.psaOrderNum;
+    const isComplete = psaOrders[key]?.complete;
+    const target = isComplete ? completeGroups : openGroups;
+    if (!target[key]) target[key] = [];
+    target[key].push(c);
+  });
+  noOrderCards.forEach(c => {
+    if (!openGroups['(No Order #)']) openGroups['(No Order #)'] = [];
+    openGroups['(No Order #)'].push(c);
+  });
+
+  const openHtml = Object.entries(openGroups).map(([num, grp], gi) =>
+    buildOrderGroup(num, grp, gi, false)
+  ).join('');
+
+  const completeHtml = Object.entries(completeGroups).map(([num, grp], gi) =>
+    buildOrderGroup(num, grp, gi, true)
+  ).join('');
+
+  const completedSection = completeHtml ? `
+    <div style="margin-top:28px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer" onclick="toggleOrderGroup('completed-section')">
+        <span style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted)">Completed Orders (${Object.keys(completeGroups).length})</span>
+        <span id="completed-section-arrow" style="color:var(--muted)">▶</span>
+      </div>
+      <div id="completed-section" style="display:none">${completeHtml}</div>
+    </div>` : '';
+
+  content.innerHTML = (openHtml || '<div class="empty-state" style="padding:32px 0"><div class="big">📬</div><p>No open PSA orders.</p></div>') + completedSection;
+}
+
+function markOrderComplete(orderNum) {
+  if (!confirm(`Mark Order #${orderNum} as complete?\n\nThis will move it to the Completed Orders archive. You can reopen it at any time.`)) return;
+  if (!psaOrders[orderNum]) psaOrders[orderNum] = { notes:[] };
+  psaOrders[orderNum].complete = true;
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  psaOrders[orderNum].completedDate = today;
+  psaOrders[orderNum].notes.push({ date: today, text: 'Order marked complete' });
+  save();
+  renderPsaOrders();
+}
+
+function markOrderOpen(orderNum) {
+  if (!psaOrders[orderNum]) return;
+  psaOrders[orderNum].complete = false;
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  psaOrders[orderNum].notes.push({ date: today, text: 'Order reopened' });
+  save();
+  renderPsaOrders();
 }
 
 // ---- PSA ORDER NOTES ----
