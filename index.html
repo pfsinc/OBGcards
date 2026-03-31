@@ -775,7 +775,8 @@
 // ---- PERSISTENT STORAGE ----
 const STORAGE_KEY = 'ogbcards-v1';
 let cards = [];
-let psaOrders = {}; // keyed by order number — stores order-level notes, dates etc.
+let psaOrders = {};
+let dcOrders = {}; // keyed by batch name — stores order-level notes, complete flag etc.
 let invSort = { key: 'buyDate', dir: 'desc' };
 let soldSort = { key: 'saleDate', dir: 'desc' };
 let selectedIds = new Set();
@@ -788,6 +789,7 @@ async function loadData() {
       const parsed = JSON.parse(result.value);
       cards = parsed.cards || [];
       psaOrders = parsed.psaOrders || {};
+      dcOrders = parsed.dcOrders || {};
     }
   } catch(e) {
     cards = [];
@@ -807,7 +809,7 @@ function showSaveIndicator(state) {
 async function save() {
   showSaveIndicator('saving');
   try {
-    await window.storage.set(STORAGE_KEY, JSON.stringify({ cards, psaOrders, savedAt: new Date().toISOString() }));
+    await window.storage.set(STORAGE_KEY, JSON.stringify({ cards, psaOrders, dcOrders, savedAt: new Date().toISOString() }));
     showSaveIndicator('saved');
   } catch(e) {
     console.error('Save failed', e);
@@ -1477,6 +1479,7 @@ function markOrderOpen(orderNum) {
 let currentNoteOrderNum = null;
 function openOrderNoteModal(orderNum) {
   currentNoteOrderNum = orderNum;
+  currentDcBatchNum = null;
   document.getElementById('order-note-order-num').textContent = `ORDER #${orderNum}`;
   document.getElementById('order-note-text').value = '';
   document.getElementById('order-note-date').value = new Date().toISOString().split('T')[0];
@@ -1488,11 +1491,15 @@ function confirmOrderNote() {
   if (!text) { alert('Please enter a note.'); return; }
   const dateVal = document.getElementById('order-note-date').value;
   const date = dateVal ? new Date(dateVal).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-  if (!psaOrders[currentNoteOrderNum]) psaOrders[currentNoteOrderNum] = { notes: [] };
-  psaOrders[currentNoteOrderNum].notes.push({ date, text });
-  save();
-  closeModal('modal-order-note');
-  renderPsaOrders();
+  if (currentDcBatchNum) {
+    if (!dcOrders[currentDcBatchNum]) dcOrders[currentDcBatchNum] = { notes:[] };
+    dcOrders[currentDcBatchNum].notes.push({ date, text });
+    save(); closeModal('modal-order-note'); renderDcOrders();
+  } else {
+    if (!psaOrders[currentNoteOrderNum]) psaOrders[currentNoteOrderNum] = { notes:[] };
+    psaOrders[currentNoteOrderNum].notes.push({ date, text });
+    save(); closeModal('modal-order-note'); renderPsaOrders();
+  }
 }
 
 function toggleOrderGroup(id) {
@@ -1540,6 +1547,13 @@ function confirmDcOrder() {
     c.shipDc = (parseFloat(c.shipDc)||0) + shipPerCard;
     if (notes) c.notes = notes;
   });
+  // Create order-level record
+  if (!dcOrders[batchName]) {
+    dcOrders[batchName] = { commission, notes: [] };
+    const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    dcOrders[batchName].notes.push({ date: today, text: `Batch created — ${ids.length} card${ids.length>1?'s':''}, ${commission?commission+'% commission':'no commission set'}` });
+    if (notes) dcOrders[batchName].notes.push({ date: today, text: notes });
+  }
   clearBulkSelection();
   save(); renderAll();
   closeModal('modal-dc-order');
@@ -1552,36 +1566,51 @@ function confirmDcOrder() {
 }
 
 function renderDcOrders() {
-  const dcCards = cards.filter(c => c.status === 'At DC Sports (consignment)' || (c.status === 'Sold' && c.dcBatchNum));
+  const dcCards = cards.filter(c => c.dcBatchNum);
   const content = document.getElementById('dc-orders-content');
-  const empty = document.getElementById('dc-orders-empty');
+  const empty   = document.getElementById('dc-orders-empty');
   if (!dcCards.length) { content.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
 
-  // Group by batch number
-  const groups = {};
+  const openGroups     = {};
+  const completeGroups = {};
+
   dcCards.forEach(c => {
-    const key = c.dcBatchNum || '(No Batch #)';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(c);
+    const key = c.dcBatchNum;
+    const isComplete = dcOrders[key]?.complete;
+    const target = isComplete ? completeGroups : openGroups;
+    if (!target[key]) target[key] = [];
+    target[key].push(c);
   });
 
-  content.innerHTML = Object.entries(groups).map(([batchNum, grp], gi) => {
+  function buildDcGroup(batchNum, grp, gi, isComplete) {
     const totalCostGrp = grp.reduce((a,c)=>a+totalCost(c),0);
-    const sold = grp.filter(c=>c.status==='Sold').length;
-    const active = grp.length - sold;
-    const commission = grp[0].dcCommission || '';
-    const statusSummary = active > 0
-      ? `<span style="color:var(--muted)">${active} active</span>${sold?` · <span style="color:var(--accent2)">${sold} sold</span>`:''}`
-      : `<span style="color:var(--accent2)">All ${sold} sold ✓</span>`;
+    const totalNet     = grp.filter(c=>c.salePrice).reduce((a,c)=>a+netProceeds(c),0);
+    const totalProfit  = totalNet - grp.filter(c=>c.salePrice).reduce((a,c)=>a+totalCost(c),0);
+    const sold         = grp.filter(c=>c.status==='Sold').length;
+    const active       = grp.length - sold;
+    const commission   = grp[0].dcCommission || dcOrders[batchNum]?.commission || '';
+    const orderData    = dcOrders[batchNum] || { notes:[] };
+    const allSold      = active === 0;
+    const prefix       = isComplete ? 'dcc' : 'dco';
+
+    const statusSummary = isComplete
+      ? `<span class="badge badge-sold" style="font-size:10px">✓ Complete</span>`
+      : active > 0
+        ? `<span style="color:var(--muted)">${active} active</span>${sold?` · <span style="color:var(--accent2)">${sold} sold</span>`:''}`
+        : `<span style="color:var(--accent2)">All ${sold} sold ✓</span>`;
 
     const rows = grp.map(c => {
-      const cost = totalCost(c);
-      const net = c.salePrice ? netProceeds(c) : null;
+      const cost   = totalCost(c);
+      const net    = c.salePrice ? netProceeds(c) : null;
       const profit = net !== null ? net - cost : null;
       const statusCell = c.status === 'Sold'
         ? `<span class="badge badge-sold">Sold</span>${c.saleDate?`<br><span style="font-size:10px;color:var(--muted)">${c.saleDate}</span>`:''}`
         : `<span class="badge badge-consign">Active</span>`;
+      const actions = isComplete
+        ? `<button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>`
+        : `<button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
+           ${c.status!=='Sold'?`<button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`:''}`;
       return `<tr>
         <td><strong>${c.player||c.desc||'—'}</strong></td>
         <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
@@ -1592,34 +1621,128 @@ function renderDcOrders() {
         <td class="mono">${net!==null?fmt(net):'—'}</td>
         <td class="mono ${profit!==null?roiClass(profit):''}">${profit!==null?fmt(profit):'—'}</td>
         <td>${statusCell}</td>
-        <td><div class="action-row">
-          <button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
-          ${c.status!=='Sold'?`<button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`:''}
-        </div></td>
+        <td><div class="action-row">${actions}</div></td>
       </tr>`;
     }).join('');
 
-    return `<div class="roi-panel" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('dcog-${gi}')">
+    // Summary bar
+    const summaryBar = allSold || isComplete
+      ? `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Cost basis: <strong style="color:var(--text)">${fmt(totalCostGrp)}</strong></span>
+         <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:14px">Net proceeds: <strong style="color:var(--text)">${fmt(totalNet)}</strong></span>
+         <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:14px">Profit: <strong class="${roiClass(totalProfit)}">${fmt(totalProfit)}</strong></span>`
+      : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Cost basis: <strong style="color:var(--text)">${fmt(totalCostGrp)}</strong></span>
+         ${sold?`<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:14px">Realized so far: <strong style="color:var(--accent2)">${fmt(totalNet)}</strong></span>`:''}`;
+
+    // Notes
+    const notesList = (orderData.notes||[]).map(n =>
+      `<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);white-space:nowrap;min-width:90px">${n.date}</span>
+        <span style="font-size:12px;color:var(--text)">${n.text}</span>
+      </div>`
+    ).join('');
+
+    // Complete button — only on open batches where all cards are sold
+    const completeBtn = !isComplete && allSold && grp.length > 0
+      ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;border-color:var(--accent2);color:var(--accent2)" onclick="markDcOrderComplete('${batchNum}')">✓ Mark Batch Complete</button>`
+      : isComplete
+        ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markDcOrderOpen('${batchNum}')">↩ Reopen Batch</button>`
+        : '';
+
+    const defaultDisplay = isComplete ? 'none' : 'block';
+    const defaultArrow   = isComplete ? '▶' : '▼';
+
+    return `<div class="roi-panel" style="margin-bottom:14px;${isComplete?'opacity:0.8':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}')">
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-          <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:#c84ae8">BATCH: ${batchNum}</span>
+          <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:${isComplete?'var(--muted)':'#c84ae8'}">BATCH: ${batchNum}</span>
           ${commission?`<span class="badge badge-consign">${commission}% commission</span>`:''}
-          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''} · ${fmt(totalCostGrp)}</span>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${grp.length} card${grp.length>1?'s':''}</span>
           <span style="font-family:var(--font-mono);font-size:11px">${statusSummary}</span>
+          ${orderData.completedDate?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">completed ${orderData.completedDate}</span>`:''}
         </div>
-        <span id="dcog-${gi}-arrow" style="color:var(--muted);font-size:16px">▼</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${completeBtn}
+          <span id="${prefix}-${gi}-arrow" style="color:var(--muted);font-size:16px">${defaultArrow}</span>
+        </div>
       </div>
-      <div id="dcog-${gi}" style="margin-top:14px">
-        <div class="table-wrap"><table style="min-width:0">
+      <div id="${prefix}-${gi}" style="margin-top:14px;display:${defaultDisplay}">
+        <div style="display:flex;align-items:center;gap:20px;padding:10px 14px;background:var(--surface2);border-radius:6px;margin-bottom:12px;flex-wrap:wrap">
+          ${summaryBar}
+        </div>
+        <div class="table-wrap" style="margin-bottom:14px"><table style="min-width:0">
           <thead><tr>
             <th>Player</th><th>Year</th><th>Brand</th><th>Set · Subset</th><th>#</th>
             <th>Cost</th><th>Net Sale</th><th>Profit</th><th>Status</th><th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)">Batch Log</span>
+            <button class="btn btn-ghost" style="font-size:10px;padding:3px 10px" onclick="openDcNoteModal('${batchNum}')">+ Add Note</button>
+          </div>
+          <div>${notesList || '<span style="color:var(--muted);font-size:12px">No notes yet.</span>'}</div>
+        </div>
       </div>
     </div>`;
-  }).join('');
+  }
+
+  const openHtml     = Object.entries(openGroups).map(([b,g],i) => buildDcGroup(b,g,i,false)).join('');
+  const completeHtml = Object.entries(completeGroups).map(([b,g],i) => buildDcGroup(b,g,i,true)).join('');
+
+  const completedSection = completeHtml ? `
+    <div style="margin-top:28px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer" onclick="toggleOrderGroup('dc-completed-section')">
+        <span style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted)">Completed Batches (${Object.keys(completeGroups).length})</span>
+        <span id="dc-completed-section-arrow" style="color:var(--muted)">▶</span>
+      </div>
+      <div id="dc-completed-section" style="display:none">${completeHtml}</div>
+    </div>` : '';
+
+  content.innerHTML = (openHtml || '<div class="empty-state" style="padding:32px 0"><div class="big">🏪</div><p>No open DC Sports batches.</p></div>') + completedSection;
+}
+
+function markDcOrderComplete(batchNum) {
+  if (!confirm(`Mark Batch "${batchNum}" as complete?\n\nThis will archive it at the bottom. You can reopen it at any time.`)) return;
+  if (!dcOrders[batchNum]) dcOrders[batchNum] = { notes:[] };
+  dcOrders[batchNum].complete = true;
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  dcOrders[batchNum].completedDate = today;
+  dcOrders[batchNum].notes.push({ date: today, text: 'Batch marked complete' });
+  save();
+  renderDcOrders();
+}
+
+function markDcOrderOpen(batchNum) {
+  if (!dcOrders[batchNum]) return;
+  dcOrders[batchNum].complete = false;
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  dcOrders[batchNum].notes.push({ date: today, text: 'Batch reopened' });
+  save();
+  renderDcOrders();
+}
+
+// ---- DC ORDER NOTES ----
+let currentDcBatchNum = null;
+function openDcNoteModal(batchNum) {
+  currentDcBatchNum = batchNum;
+  currentNoteOrderNum = null;
+  document.getElementById('order-note-order-num').textContent = `BATCH: ${batchNum}`;
+  document.getElementById('order-note-text').value = '';
+  document.getElementById('order-note-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-order-note').classList.add('open');
+  setTimeout(() => document.getElementById('order-note-text').focus(), 100);
+}
+function confirmDcNote() {
+  const text = document.getElementById('order-note-text').value.trim();
+  if (!text) { alert('Please enter a note.'); return; }
+  const dateVal = document.getElementById('order-note-date').value;
+  const date = dateVal ? new Date(dateVal).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  if (!dcOrders[currentDcBatchNum]) dcOrders[currentDcBatchNum] = { notes:[] };
+  dcOrders[currentDcBatchNum].notes.push({ date, text });
+  save();
+  closeModal('modal-order-note');
+  renderDcOrders();
 }
 
 function renderInventory() {
@@ -1999,7 +2122,7 @@ document.querySelectorAll('.modal-overlay').forEach(el=>{
 
 // ---- BACKUP / RESTORE ----
 function exportBackup() {
-  const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), cards, psaOrders }, null, 2);
+  const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), cards, psaOrders, dcOrders }, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2034,6 +2157,7 @@ function importBackup(input) {
       }
       save(); renderAll();
       if (data.psaOrders) psaOrders = Object.assign(psaOrders, data.psaOrders);
+      if (data.dcOrders) dcOrders = Object.assign(dcOrders, data.dcOrders);
     } catch(err) {
       alert('Could not read backup file. Make sure it is a valid OGBcards JSON backup.');
     }
