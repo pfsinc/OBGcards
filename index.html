@@ -714,6 +714,7 @@
               <option value="10">PSA 10</option><option value="9">PSA 9</option><option value="8">PSA 8</option>
               <option value="7">PSA 7</option><option value="6">PSA 6</option><option value="5">PSA 5</option>
               <option value="4">PSA 4</option><option value="3">PSA 3</option><option value="2">PSA 2</option><option value="1">PSA 1</option>
+              <option value="N/A">N/A — Not Graded / Returned Raw</option>
             </select>
           </div>
         </div>
@@ -1300,7 +1301,7 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
   const acqCostTotal    = grp.reduce((a,c) => a+cardAcqCost(c), 0);
   const pendingFees     = grp.reduce((a,c) => a+pendingPsaCost(c), 0);
   const gradedCostTotal = grp.reduce((a,c) => a+totalCost(c), 0);
-  const graded  = grp.filter(c=>c.psaGrade).length;
+  const graded  = grp.filter(c=>c.psaGrade).length; // includes N/A
   const pending = grp.length - graded;
   const level     = grp[0]?.psaLevel || '';
   const orderData = psaOrders[orderNum] || { notes:[] };
@@ -1318,9 +1319,11 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
     const psaPending = pendingPsaCost(c);
     const fullCost   = totalCost(c);
     const regradeNote = c.regradeHistory?.length ? ` <span style="font-size:10px;color:var(--muted)">(regrade #${c.regradeHistory.length+1})</span>` : '';
-    const gradeCell = c.psaGrade
-      ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
-      : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
+    const gradeCell = c.psaGrade === 'N/A'
+      ? `<span class="badge" style="background:rgba(122,127,142,0.2);color:var(--muted)">N/A — Returned Raw</span>`
+      : c.psaGrade
+        ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${c.preGrade?` <span style="font-size:10px;color:var(--muted)">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>`:''}`
+        : c.preGrade ? `<span style="font-size:11px;color:var(--accent);opacity:0.8">✦ pred. ${c.preGrade}</span>` : '<span style="color:var(--muted)">Pending</span>';
     const askCell  = c.askingPrice ? `<br><span style="font-size:10px;font-family:var(--font-mono);color:#4ae8a0">Ask: ${fmt(c.askingPrice)}</span>` : '';
     const costCell = c.psaGrade
       ? `<span class="mono">${fmt(fullCost)}</span>`
@@ -1637,11 +1640,13 @@ function renderInventory() {
     const setSubset = [c.set, c.subset].filter(Boolean).join(' · ') || '—';
     const regradeNote = c.regradeHistory && c.regradeHistory.length ? `<br><span style="font-size:10px;color:var(--muted)">regrade #${c.regradeHistory.length+1}</span>` : '';
     const preGradeNote = !c.psaGrade && c.preGrade ? `<br><span style="font-size:10px;color:var(--accent);opacity:0.8" title="Your pre-grade prediction">✦ pred. ${c.preGrade}</span>` : '';
-    const gradeCell = c.psaGrade
-      ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${regradeNote}${c.preGrade ? `<br><span style="font-size:10px;color:var(--muted)" title="Your prediction was ${c.preGrade}">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>` : ''}`
-      : c.origGrader && c.origGrade
-        ? `<span class="badge badge-graded-in">${c.origGrader} ${c.origGrade}</span>`
-        : preGradeNote || '—';
+    const gradeCell = c.psaGrade === 'N/A'
+      ? `<span class="badge" style="background:rgba(122,127,142,0.2);color:var(--muted)">N/A — Returned Raw</span>`
+      : c.psaGrade
+        ? `<span class="badge badge-psa">PSA ${c.psaGrade}</span>${regradeNote}${c.preGrade ? `<br><span style="font-size:10px;color:var(--muted)" title="Your prediction was ${c.preGrade}">pred. ${c.preGrade} ${c.preGrade==c.psaGrade?'✓':'✗'}</span>` : ''}`
+        : c.origGrader && c.origGrade
+          ? `<span class="badge badge-graded-in">${c.origGrader} ${c.origGrade}</span>`
+          : preGradeNote || '—';
     return `<tr>
       <td><input type="checkbox" class="inv-row-cb" data-id="${c.id}" ${selectedIds.has(c.id)?'checked':''} onchange="toggleCardSelect('${c.id}',this.checked)"></td>
       <td><strong style="font-size:12px">${name}</strong></td>
