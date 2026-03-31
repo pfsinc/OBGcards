@@ -696,8 +696,8 @@
       <div id="status-psa-fields" class="field-group" style="display:none">
         <div class="field-group-title">PSA Details</div>
         <div class="form-grid" style="padding:0">
-          <div class="form-group"><label>PSA Grading Fee ($)</label><input type="number" id="status-psa-fee" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="form-group"><label>Shipping to PSA ($)</label><input type="number" id="status-ship-psa" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="form-group"><label>Additional Grading Fee ($)</label><input type="number" id="status-psa-fee" step="0.01" placeholder="0.00"></div>
+          <div class="form-group"><label>Additional Ship to PSA ($)</label><input type="number" id="status-ship-psa" step="0.01" placeholder="0.00"></div>
           <div class="form-group">
             <label>My Pre-Grade Prediction</label>
             <select id="status-pregrade">
@@ -1078,8 +1078,8 @@ function openStatusModal(id) {
   document.getElementById('status-id').value=id;
   document.getElementById('status-card-name').value=[c.player||c.desc, c.origGrader?`(${c.origGrader} ${c.origGrade} slab)`:''].filter(Boolean).join(' ');
   document.getElementById('status-new').value=c.status;
-  document.getElementById('status-psa-fee').value=c.psaFee||'';
-  document.getElementById('status-ship-psa').value=c.shipPsa||'';
+  document.getElementById('status-psa-fee').value='';
+  document.getElementById('status-ship-psa').value='';
   document.getElementById('status-psa-grade').value=c.psaGrade||'';
   document.getElementById('status-pregrade').value=c.preGrade||'';
   document.getElementById('status-ship-dc').value=c.shipDc||'';
