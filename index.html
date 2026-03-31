@@ -709,12 +709,41 @@
           </div>
           <div class="form-group">
             <label>PSA Grade (if returned)</label>
-            <select id="status-psa-grade">
+            <select id="status-psa-grade" onchange="updateGradeDestination()">
               <option value="">Pending</option>
               <option value="10">PSA 10</option><option value="9">PSA 9</option><option value="8">PSA 8</option>
               <option value="7">PSA 7</option><option value="6">PSA 6</option><option value="5">PSA 5</option>
               <option value="4">PSA 4</option><option value="3">PSA 3</option><option value="2">PSA 2</option><option value="1">PSA 1</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRADE DESTINATION — appears when a grade is selected -->
+      <div id="status-grade-destination" class="field-group" style="display:none;background:rgba(232,200,74,0.06);border-color:rgba(232,200,74,0.3)">
+        <div class="field-group-title" style="color:var(--accent)">📬 Grade returned — where is this card going?</div>
+        <div class="form-grid" style="padding:0">
+          <div class="form-group full">
+            <label>Next Destination</label>
+            <select id="status-grade-dest" onchange="updateGradeDestFields()">
+              <option value="Holding - PSA Vault">PSA Vault — Hold for now</option>
+              <option value="Holding - PSA Vault (For Sale)">PSA Vault — List for Sale</option>
+              <option value="At DC Sports (consignment)">Send to DC Sports</option>
+              <option value="Personal collection">Personal Collection</option>
+              <option value="At PSA (grading)">Stay At PSA (pending)</option>
+            </select>
+          </div>
+          <!-- Asking price if listing for sale -->
+          <div id="dest-vault-sale" class="form-group" style="display:none">
+            <label>Asking Price ($)</label>
+            <input type="number" id="dest-asking-price" step="0.01" min="0" placeholder="0.00">
+          </div>
+          <!-- DC Sports fields -->
+          <div id="dest-dc-fields" style="display:none;grid-column:1/-1">
+            <div class="form-grid" style="padding:0">
+              <div class="form-group"><label>DC Batch Name</label><input type="text" id="dest-dc-batch" placeholder="e.g. Batch 3"></div>
+              <div class="form-group"><label>Commission %</label><input type="number" id="dest-dc-commission" step="0.1" min="0" max="100" placeholder="15"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1058,6 +1087,11 @@ function openStatusModal(id) {
   document.getElementById('status-est-value').value=c.estValue||'';
   document.getElementById('status-notes').value=c.notes||'';
   document.getElementById('status-asking-price').value=c.askingPrice||'';
+  document.getElementById('status-grade-dest').value='Holding - PSA Vault';
+  document.getElementById('dest-asking-price').value='';
+  document.getElementById('dest-dc-batch').value=c.dcBatchNum||'';
+  document.getElementById('dest-dc-commission').value=c.dcCommission||15;
+  document.getElementById('status-grade-destination').style.display='none';
   updateStatusModalFields();
   document.getElementById('modal-status').classList.add('open');
 }
@@ -1066,15 +1100,13 @@ function updateStatusModalFields() {
   document.getElementById('status-psa-fields').style.display=s==='At PSA (grading)'?'block':'none';
   document.getElementById('status-dc-fields').style.display=s==='At DC Sports (consignment)'?'block':'none';
   document.getElementById('status-vault-sale-fields').style.display=s==='Holding - PSA Vault (For Sale)'?'block':'none';
+  // Hide destination panel when status changes away from PSA
+  if (s!=='At PSA (grading)') document.getElementById('status-grade-destination').style.display='none';
   const cardId=document.getElementById('status-id').value;
   const card=cards.find(x=>x.id===cardId);
   const rn=document.getElementById('status-regrade-note');
-
-  // Show regrade panel if: card has a PSA grade already (PSA→PSA regrade)
-  // OR card was a previously graded slab from another company
   const hasPsaGrade = card && card.psaGrade;
   const wasOtherGraderSlab = card && card.origGrader && card.origGrader !== 'PSA' && card.status === 'Just purchased - graded';
-
   if (s === 'At PSA (grading)' && (hasPsaGrade || wasOtherGraderSlab)) {
     rn.style.display = 'block';
     if (hasPsaGrade) {
@@ -1089,7 +1121,23 @@ function updateStatusModalFields() {
   } else {
     rn.style.display = 'none';
   }
+  // Re-check grade destination in case grade was already set
+  updateGradeDestination();
 }
+
+function updateGradeDestination() {
+  const grade = document.getElementById('status-psa-grade').value;
+  const destPanel = document.getElementById('status-grade-destination');
+  destPanel.style.display = grade ? 'block' : 'none';
+  if (grade) updateGradeDestFields();
+}
+
+function updateGradeDestFields() {
+  const dest = document.getElementById('status-grade-dest').value;
+  document.getElementById('dest-vault-sale').style.display  = dest==='Holding - PSA Vault (For Sale)' ? 'block' : 'none';
+  document.getElementById('dest-dc-fields').style.display   = dest==='At DC Sports (consignment)'     ? 'block' : 'none';
+}
+
 function confirmStatusUpdate() {
   const id=document.getElementById('status-id').value;
   const c=cards.find(x=>x.id===id); if(!c) return;
@@ -1101,13 +1149,12 @@ function confirmStatusUpdate() {
     c.cracked=true; c.crackedDate=new Date().toISOString().split('T')[0];
   }
 
-  // Cracking a returned PSA grade to resubmit (disagree with grade)
+  // Cracking a returned PSA grade to resubmit
   if (s==='At PSA (grading)' && c.psaGrade) {
-    // Save regrade history
     if (!c.regradeHistory) c.regradeHistory = [];
     c.regradeHistory.push({ grade: c.psaGrade, preGrade: c.preGrade||'', crackedDate: new Date().toISOString().split('T')[0] });
-    c.psaGrade = ''; // clear — pending new grade
-    c.preGrade = ''; // clear old prediction
+    c.psaGrade = '';
+    c.preGrade = '';
     c.cracked = true;
     c.crackedDate = new Date().toISOString().split('T')[0];
   }
@@ -1117,10 +1164,28 @@ function confirmStatusUpdate() {
     const ship=parseFloat(document.getElementById('status-ship-psa').value)||0;
     if (fee) c.psaFee = (c.psaFee||0) + fee;
     if (ship) c.shipPsa = (c.shipPsa||0) + ship;
-    c.psaGrade=document.getElementById('status-psa-grade').value;
+    const grade = document.getElementById('status-psa-grade').value;
+    c.psaGrade = grade;
     const pg=document.getElementById('status-pregrade').value;
     if (pg) c.preGrade=pg;
+
+    // --- Grade destination flow ---
+    if (grade) {
+      const dest = document.getElementById('status-grade-dest').value;
+      c.status = dest; // override status to destination
+      if (dest === 'Holding - PSA Vault (For Sale)') {
+        const ap = parseFloat(document.getElementById('dest-asking-price').value)||0;
+        if (ap) c.askingPrice = ap;
+      }
+      if (dest === 'At DC Sports (consignment)') {
+        const batch = document.getElementById('dest-dc-batch').value.trim();
+        const comm  = parseFloat(document.getElementById('dest-dc-commission').value)||15;
+        if (batch) c.dcBatchNum = batch;
+        c.dcCommission = comm;
+      }
+    }
   }
+
   if (s==='At DC Sports (consignment)') {
     const ship=parseFloat(document.getElementById('status-ship-dc').value)||0;
     if (ship&&!c.shipDc) c.shipDc=ship;
