@@ -339,6 +339,15 @@
         <div class="breakdown-row"><span class="breakdown-label">At PSA</span><span class="breakdown-value mono" id="roi-psa-cost">$0.00</span></div>
         <div class="breakdown-row"><span class="breakdown-label">At DC Sports</span><span class="breakdown-value mono" id="roi-dc-cost">$0.00</span></div>
         <div class="breakdown-row"><span class="breakdown-label">Holding (PSA Vault)</span><span class="breakdown-value mono" id="roi-vault-cost">$0.00</span></div>
+        <div class="breakdown-row" style="flex-direction:column;align-items:flex-start;gap:3px">
+          <div style="display:flex;justify-content:space-between;width:100%">
+            <span class="breakdown-label">PSA Vault (For Sale)</span>
+            <span class="breakdown-value mono" id="roi-vault-sale-cost">$0.00</span>
+          </div>
+          <div id="roi-vault-sale-ask-row" style="display:none;width:100%;padding-left:12px">
+            <span style="font-size:11px;color:#4ae8a0;font-family:var(--font-mono)" id="roi-vault-sale-ask"></span>
+          </div>
+        </div>
         <div class="breakdown-row"><span class="breakdown-label">Personal Collection</span><span class="breakdown-value mono" id="roi-pers-cost">$0.00</span></div>
         <div class="breakdown-row"><span class="breakdown-label">Total Capital Deployed</span><span class="breakdown-value mono" id="roi-total-capital">$0.00</span></div>
       </div>
@@ -1884,7 +1893,20 @@ function renderROI() {
   document.getElementById('roi-graded-cost').textContent=fmt(byStatus('Just purchased - graded'));
   document.getElementById('roi-psa-cost').textContent=fmt(byStatus('At PSA (grading)'));
   document.getElementById('roi-dc-cost').textContent=fmt(byStatus('At DC Sports (consignment)'));
-  document.getElementById('roi-vault-cost').textContent=fmt(byStatus('Holding - PSA Vault')+byStatus('Holding - PSA Vault (For Sale)'));
+  document.getElementById('roi-vault-cost').textContent=fmt(byStatus('Holding - PSA Vault'));
+  const vaultSaleCost = byStatus('Holding - PSA Vault (For Sale)');
+  document.getElementById('roi-vault-sale-cost').textContent=fmt(vaultSaleCost);
+  const vaultSaleCards = cards.filter(c=>c.status==='Holding - PSA Vault (For Sale)');
+  const totalAsking = vaultSaleCards.reduce((a,c)=>a+(parseFloat(c.askingPrice)||0),0);
+  const listedCount = vaultSaleCards.filter(c=>c.askingPrice).length;
+  const askRow = document.getElementById('roi-vault-sale-ask-row');
+  const askEl  = document.getElementById('roi-vault-sale-ask');
+  if (totalAsking > 0) {
+    askEl.textContent = `↳ ${listedCount} card${listedCount>1?'s':''} listed · total asking ${fmt(totalAsking)}`;
+    askRow.style.display = 'block';
+  } else {
+    askRow.style.display = 'none';
+  }
   document.getElementById('roi-pers-cost').textContent=fmt(byStatus('Personal collection'));
   document.getElementById('roi-total-capital').textContent=fmt(cards.filter(c=>c.status!=='Sold').reduce((a,c)=>a+totalCost(c),0));
   const tbody=document.getElementById('roi-tbody'), empty=document.getElementById('roi-empty');
