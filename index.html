@@ -564,6 +564,9 @@
     </div>
   </div>
 </div>
+
+<!-- ADD CARD MODAL -->
+<div class="modal-overlay" id="modal-add">
   <div class="modal">
     <div class="modal-title" id="add-modal-title">ADD CARD</div>
     <div class="form-grid">
@@ -1390,11 +1393,12 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
       ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markOrderOpen('${orderNum}')">↩ Reopen Order</button>`
       : '';
 
-  // Default: open orders expanded, completed orders collapsed — but respect saved state
-  const savedExpanded = orderData.expanded;
-  const defaultExpanded = isComplete
-    ? (savedExpanded === true)           // completed: collapsed unless explicitly expanded
-    : (savedExpanded !== false);          // open: expanded unless explicitly collapsed
+  // Completed orders default collapsed, open orders default expanded
+  // Respect explicitly saved state (expanded: true/false) if present
+  let defaultExpanded;
+  if (orderData.expanded === true)  defaultExpanded = true;
+  else if (orderData.expanded === false) defaultExpanded = false;
+  else defaultExpanded = !isComplete; // fallback: open=expanded, complete=collapsed
   const defaultDisplay = defaultExpanded ? 'block' : 'none';
   const defaultArrow   = defaultExpanded ? '▼' : '▶';
 
@@ -1615,14 +1619,14 @@ function toggleOrderGroup(id, orderNum, storeKey) {
   const el = document.getElementById(id);
   const arrow = document.getElementById(id+'-arrow');
   if (!el) return;
-  const collapsed = el.style.display === 'none';
-  el.style.display = collapsed ? 'block' : 'none';
-  arrow.textContent = collapsed ? '▼' : '▶';
-  // Persist expanded state so it survives reload
+  const isNowExpanded = el.style.display === 'none'; // was hidden, now expanding
+  el.style.display = isNowExpanded ? 'block' : 'none';
+  arrow.textContent = isNowExpanded ? '▼' : '▶';
+  // Persist so state survives reload
   if (storeKey && orderNum) {
     const store = storeKey === 'dc' ? dcOrders : psaOrders;
     if (!store[orderNum]) store[orderNum] = { notes:[] };
-    store[orderNum].expanded = collapsed; // collapsed→true means now expanded
+    store[orderNum].expanded = isNowExpanded; // true = expanded, false = collapsed
     save();
   }
 }
@@ -1763,11 +1767,12 @@ function renderDcOrders() {
         ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markDcOrderOpen('${batchNum}')">↩ Reopen Batch</button>`
         : '';
 
-    const dcSavedExpanded = orderData.expanded;
-    const defaultDisplay = isComplete
-      ? (dcSavedExpanded === true ? 'block' : 'none')
-      : (dcSavedExpanded === false ? 'none' : 'block');
-    const defaultArrow = defaultDisplay === 'block' ? '▼' : '▶';
+    let dcDefaultExpanded;
+    if (orderData.expanded === true)  dcDefaultExpanded = true;
+    else if (orderData.expanded === false) dcDefaultExpanded = false;
+    else dcDefaultExpanded = !isComplete;
+    const defaultDisplay = dcDefaultExpanded ? 'block' : 'none';
+    const defaultArrow   = dcDefaultExpanded ? '▼' : '▶';
 
     return `<div class="roi-panel" style="margin-bottom:14px;${isComplete?'opacity:0.8':''}">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}','${batchNum}','dc')">
