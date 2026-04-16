@@ -549,7 +549,21 @@
     </div>
   </div>
 </div>
-<div class="modal-overlay" id="modal-add">
+
+<!-- ADD CARDS TO PSA ORDER MODAL -->
+<div class="modal-overlay" id="modal-add-to-order">
+  <div class="modal" style="width:620px">
+    <div class="modal-title">ADD CARDS TO ORDER</div>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--accent);margin-bottom:4px" id="add-to-order-num"></div>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:16px">Select cards from your inventory to add to this order. Only cards not already in a PSA order are shown.</p>
+    <div id="add-to-order-list" style="max-height:340px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px"></div>
+    <div style="margin-top:12px;font-family:var(--font-mono);font-size:11px;color:var(--muted)" id="add-to-order-selected-count">0 cards selected</div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-to-order')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddToOrder()">Add to Order</button>
+    </div>
+  </div>
+</div>
   <div class="modal">
     <div class="modal-title" id="add-modal-title">ADD CARD</div>
     <div class="form-grid">
@@ -1343,7 +1357,8 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
       ? `<button class="btn btn-small" onclick="openEditModal('${c.id}')">Edit</button>
          <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`
       : `<button class="btn btn-small" onclick="openStatusModal('${c.id}')">Update</button>
-         <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>`;
+         <button class="btn btn-primary btn-small" onclick="openSellModal('${c.id}')">Sell</button>
+         <button class="btn btn-danger" style="font-size:10px;padding:3px 8px" onclick="removeCardFromOrder('${c.id}','${orderNum}')" title="Remove from this order">✕ Remove</button>`;
     return `<tr>
       <td><strong>${c.player||c.desc||'—'}</strong></td>
       <td class="mono" style="color:var(--muted);font-size:11px">${c.year||'—'}</td>
@@ -1375,12 +1390,16 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
       ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markOrderOpen('${orderNum}')">↩ Reopen Order</button>`
       : '';
 
-  // Default collapsed for completed orders
-  const defaultDisplay = isComplete ? 'none' : 'block';
-  const defaultArrow   = isComplete ? '▶' : '▼';
+  // Default: open orders expanded, completed orders collapsed — but respect saved state
+  const savedExpanded = orderData.expanded;
+  const defaultExpanded = isComplete
+    ? (savedExpanded === true)           // completed: collapsed unless explicitly expanded
+    : (savedExpanded !== false);          // open: expanded unless explicitly collapsed
+  const defaultDisplay = defaultExpanded ? 'block' : 'none';
+  const defaultArrow   = defaultExpanded ? '▼' : '▶';
 
   return `<div class="roi-panel" style="margin-bottom:14px;${isComplete?'opacity:0.8':''}">
-    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}')">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}','${orderNum}','psa')">
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
         <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:${isComplete?'var(--muted)':'var(--accent)'}">ORDER #${orderNum}</span>
         ${level?`<span class="badge badge-purchased">${level}</span>`:''}
@@ -1389,6 +1408,7 @@ function buildOrderGroup(orderNum, grp, gi, isComplete) {
         ${orderData.completedDate?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">completed ${orderData.completedDate}</span>`:''}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
+        ${!isComplete ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px" onclick="openAddToOrderModal('${orderNum}')">+ Add Cards</button>` : ''}
         ${completeBtn}
         <span id="${prefix}-${gi}-arrow" style="color:var(--muted);font-size:16px">${defaultArrow}</span>
       </div>
@@ -1464,6 +1484,86 @@ function renderPsaOrders() {
   content.innerHTML = (openHtml || '<div class="empty-state" style="padding:32px 0"><div class="big">📬</div><p>No open PSA orders.</p></div>') + completedSection;
 }
 
+// ---- PSA ORDER — ADD / REMOVE CARDS ----
+function removeCardFromOrder(cardId, orderNum) {
+  const c = cards.find(x => x.id === cardId);
+  if (!c) return;
+  const name = c.player || c.desc || 'this card';
+  if (!confirm(`Remove "${name}" from Order #${orderNum}?\n\nThe card will be moved back to "Just Purchased" status and its PSA order number cleared.`)) return;
+  c.psaOrderNum = '';
+  c.psaLevel = '';
+  c.status = c.psaGrade ? 'Just purchased - graded' : 'Just purchased';
+  // Log it
+  if (!psaOrders[orderNum]) psaOrders[orderNum] = { notes:[] };
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  psaOrders[orderNum].notes.push({ date: today, text: `Removed: ${name} ${c.year||''} ${c.brand||''} ${c.subset||''}`.trim() });
+  save(); renderAll(); renderPsaOrders();
+}
+
+let addToOrderNum = null;
+let addToOrderSelections = new Set();
+
+function openAddToOrderModal(orderNum) {
+  addToOrderNum = orderNum;
+  addToOrderSelections = new Set();
+  document.getElementById('add-to-order-num').textContent = `ORDER #${orderNum}`;
+
+  // Eligible: any non-sold card that is NOT already in a PSA order
+  const eligible = cards.filter(c =>
+    c.status !== 'Sold' &&
+    !c.psaOrderNum &&
+    c.status !== 'At PSA (grading)'
+  );
+
+  if (!eligible.length) {
+    document.getElementById('add-to-order-list').innerHTML =
+      '<p style="color:var(--muted);font-size:12px;padding:12px">No eligible cards — all inventory cards are either already in a PSA order or sold.</p>';
+  } else {
+    document.getElementById('add-to-order-list').innerHTML = eligible.map(c => {
+      const name = [c.player, c.year, c.brand, c.set, c.subset, c.cardnum].filter(Boolean).join(' · ');
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px">
+        <input type="checkbox" value="${c.id}" onchange="toggleAddToOrderCard('${c.id}')">
+        <span style="color:var(--text)">${name}</span>
+        <span style="color:var(--muted);margin-left:auto;font-family:var(--font-mono)">${fmt(cardAcqCost(c))}</span>
+      </label>`;
+    }).join('');
+  }
+  updateAddToOrderCount();
+  document.getElementById('modal-add-to-order').classList.add('open');
+}
+
+function toggleAddToOrderCard(id) {
+  if (addToOrderSelections.has(id)) addToOrderSelections.delete(id);
+  else addToOrderSelections.add(id);
+  updateAddToOrderCount();
+}
+
+function updateAddToOrderCount() {
+  const n = addToOrderSelections.size;
+  document.getElementById('add-to-order-selected-count').textContent =
+    n === 0 ? '0 cards selected' : `${n} card${n>1?'s':''} selected`;
+}
+
+function confirmAddToOrder() {
+  if (!addToOrderSelections.size) { alert('No cards selected.'); return; }
+  const orderData = psaOrders[addToOrderNum] || {};
+  const level = orderData.level || '';
+  const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  const added = [];
+  addToOrderSelections.forEach(id => {
+    const c = cards.find(x => x.id === id);
+    if (!c) return;
+    c.psaOrderNum = addToOrderNum;
+    c.psaLevel = level;
+    c.status = 'At PSA (grading)';
+    added.push(`${c.player||c.desc||'—'} ${c.year||''} ${c.brand||''}`.trim());
+  });
+  if (!psaOrders[addToOrderNum]) psaOrders[addToOrderNum] = { notes:[] };
+  psaOrders[addToOrderNum].notes.push({ date: today, text: `Added ${added.length} card${added.length>1?'s':''}: ${added.join(', ')}` });
+  closeModal('modal-add-to-order');
+  save(); renderAll(); renderPsaOrders();
+}
+
 function markOrderComplete(orderNum) {
   if (!confirm(`Mark Order #${orderNum} as complete?\n\nThis will move it to the Completed Orders archive. You can reopen it at any time.`)) return;
   if (!psaOrders[orderNum]) psaOrders[orderNum] = { notes:[] };
@@ -1511,15 +1611,21 @@ function confirmOrderNote() {
   }
 }
 
-function toggleOrderGroup(id) {
+function toggleOrderGroup(id, orderNum, storeKey) {
   const el = document.getElementById(id);
   const arrow = document.getElementById(id+'-arrow');
   if (!el) return;
   const collapsed = el.style.display === 'none';
   el.style.display = collapsed ? 'block' : 'none';
   arrow.textContent = collapsed ? '▼' : '▶';
+  // Persist expanded state so it survives reload
+  if (storeKey && orderNum) {
+    const store = storeKey === 'dc' ? dcOrders : psaOrders;
+    if (!store[orderNum]) store[orderNum] = { notes:[] };
+    store[orderNum].expanded = collapsed; // collapsed→true means now expanded
+    save();
+  }
 }
-
 // ---- DC SPORTS ORDERS ----
 function openDcOrderModal() {
   const ids = selectedIds.size > 0 ? [...selectedIds] : [];
@@ -1657,11 +1763,14 @@ function renderDcOrders() {
         ? `<button class="btn btn-ghost" style="font-size:10px;padding:4px 12px;color:var(--muted)" onclick="markDcOrderOpen('${batchNum}')">↩ Reopen Batch</button>`
         : '';
 
-    const defaultDisplay = isComplete ? 'none' : 'block';
-    const defaultArrow   = isComplete ? '▶' : '▼';
+    const dcSavedExpanded = orderData.expanded;
+    const defaultDisplay = isComplete
+      ? (dcSavedExpanded === true ? 'block' : 'none')
+      : (dcSavedExpanded === false ? 'none' : 'block');
+    const defaultArrow = defaultDisplay === 'block' ? '▼' : '▶';
 
     return `<div class="roi-panel" style="margin-bottom:14px;${isComplete?'opacity:0.8':''}">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleOrderGroup('${prefix}-${gi}','${batchNum}','dc')">
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
           <span style="font-family:var(--font-display);font-size:17px;letter-spacing:1px;color:${isComplete?'var(--muted)':'#c84ae8'}">BATCH: ${batchNum}</span>
           ${commission?`<span class="badge badge-consign">${commission}% commission</span>`:''}
