@@ -232,8 +232,8 @@
     <div class="section-header">
       <div class="section-title">INVENTORY</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
-        <button class="btn btn-ghost" onclick="exportPDF()">⬇ PDF</button>
+        <button class="btn btn-ghost" onclick="openExportModal('csv')">⬇ CSV</button>
+        <button class="btn btn-ghost" onclick="openExportModal('pdf')">⬇ PDF</button>
         <button class="btn btn-primary" onclick="openAddModal()">+ Add Card</button>
       </div>
     </div>
@@ -561,6 +561,33 @@
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-add-to-order')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmAddToOrder()">Add to Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT FILTER MODAL -->
+<div class="modal-overlay" id="modal-export">
+  <div class="modal" style="width:440px">
+    <div class="modal-title" id="export-modal-title">EXPORT OPTIONS</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Status Filter</label>
+        <select id="export-status-filter">
+          <option value="">All Inventory (exclude sold)</option>
+          <option value="Just purchased">Just Purchased (Raw)</option>
+          <option value="Just purchased - graded">Just Purchased (Graded Slab)</option>
+          <option value="At PSA (grading)">At PSA (Grading)</option>
+          <option value="At DC Sports (consignment)">At DC Sports</option>
+          <option value="Holding - PSA Vault">PSA Vault — Holding</option>
+          <option value="Holding - PSA Vault (For Sale)">PSA Vault — For Sale</option>
+          <option value="Personal collection">Personal Collection</option>
+          <option value="Sold">Sold Cards Only</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-export')">Cancel</button>
+      <button class="btn btn-primary" id="export-confirm-btn" onclick="confirmExport()">Download</button>
     </div>
   </div>
 </div>
@@ -2303,8 +2330,36 @@ function importBackup(input) {
 }
 
 // ---- EXPORTS ----
-function exportCSV() {
-  const inv = cards.filter(c => c.status !== 'Sold');
+let exportType = 'csv';
+function openExportModal(type) {
+  exportType = type;
+  document.getElementById('export-modal-title').textContent = type === 'csv' ? 'EXPORT CSV' : 'EXPORT PDF';
+  document.getElementById('export-confirm-btn').textContent = type === 'csv' ? '⬇ Download CSV' : '⬇ Open PDF';
+  document.getElementById('export-status-filter').value = '';
+  document.getElementById('modal-export').classList.add('open');
+}
+
+function confirmExport() {
+  const statusFilter = document.getElementById('export-status-filter').value;
+  let filtered;
+  if (statusFilter === 'Sold') {
+    filtered = cards.filter(c => c.status === 'Sold');
+  } else if (statusFilter) {
+    filtered = cards.filter(c => c.status === statusFilter);
+  } else {
+    filtered = cards.filter(c => c.status !== 'Sold');
+  }
+  if (!filtered.length) {
+    alert('No cards match that filter.'); return;
+  }
+  closeModal('modal-export');
+  if (exportType === 'csv') exportCSV(filtered, statusFilter);
+  else exportPDF(filtered, statusFilter);
+}
+
+function exportCSV(inv, statusLabel) {
+  if (!inv) { openExportModal('csv'); return; }
+  const label = statusLabel || 'inventory';
   const headers = ['Player','Year','Brand','Set','Subset','Card #','Buy Date','Buy Price','Buyer Fees','Shipping In','PSA Fee','Ship to PSA','Total Cost','PSA Grade','Pre-Grade Prediction','Status','PSA Order #','Est. Value','Notes'];
   const rows = inv.map(c => [
     c.player||'', c.year||'', c.brand||'', c.set||'', c.subset||'', c.cardnum||'',
@@ -2321,23 +2376,23 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ogbcards-inventory-${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `ogbcards-${label.replace(/[^a-z0-9]/gi,'-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-function exportPDF() {
-  const inv = cards.filter(c => c.status !== 'Sold');
+function exportPDF(inv, statusLabel) {
+  if (!inv) { openExportModal('pdf'); return; }
+  const label = statusLabel || 'All Inventory';
   const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
   const totalInvested = inv.reduce((a,c) => a + totalCost(c), 0);
-  const atPsa = inv.filter(c => c.status === 'At PSA (grading)').length;
-  const personal = inv.filter(c => c.status === 'Personal collection').length;
 
   const statusColor = s => {
     if (s === 'At PSA (grading)') return '#4a8fe8';
     if (s === 'At DC Sports (consignment)') return '#c84ae8';
     if (s.includes('PSA Vault')) return '#4ac8e8';
     if (s === 'Personal collection') return '#e87e4a';
+    if (s === 'Sold') return '#4ae8a0';
     return '#888';
   };
 
@@ -2356,13 +2411,14 @@ function exportPDF() {
     </tr>`).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>OGBcards Inventory — ${date}</title>
+  <title>OGBcards — ${label} — ${date}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 24px; }
     h1 { font-size: 28px; letter-spacing: 3px; color: #e8c84a; margin: 0; }
     h1 span { color: #111; }
     .meta { color: #666; font-size: 11px; margin: 4px 0 18px; }
-    .summary { display: flex; gap: 28px; margin-bottom: 20px; padding: 12px 16px; background: #f5f5f5; border-radius: 6px; }
+    .filter-label { display:inline-block; background:#1e2127; color:#e8c84a; font-size:10px; letter-spacing:1px; padding:3px 10px; border-radius:3px; margin-bottom:14px; text-transform:uppercase; }
+    .summary { display: flex; gap: 28px; margin-bottom: 20px; padding: 12px 16px; background: #f5f5f5; border-radius: 6px; flex-wrap:wrap; }
     .sitem { text-align: center; }
     .sitem-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #999; }
     .sitem-value { font-size: 18px; font-weight: bold; color: #111; }
@@ -2372,12 +2428,11 @@ function exportPDF() {
     @media print { body { padding: 12px; } }
   </style></head><body>
   <h1>OGB<span>CARDS</span></h1>
-  <div class="meta">Inventory Report · ${date} · ${inv.length} cards</div>
+  <div class="meta">Report · ${date}</div>
+  <div class="filter-label">${label}</div>
   <div class="summary">
-    <div class="sitem"><div class="sitem-label">Total Cards</div><div class="sitem-value">${inv.length}</div></div>
-    <div class="sitem"><div class="sitem-label">Total Invested</div><div class="sitem-value">$${totalInvested.toFixed(2)}</div></div>
-    <div class="sitem"><div class="sitem-label">At PSA</div><div class="sitem-value">${atPsa}</div></div>
-    <div class="sitem"><div class="sitem-label">Personal Collection</div><div class="sitem-value">${personal}</div></div>
+    <div class="sitem"><div class="sitem-label">Cards</div><div class="sitem-value">${inv.length}</div></div>
+    <div class="sitem"><div class="sitem-label">Total Cost Basis</div><div class="sitem-value">$${totalInvested.toFixed(2)}</div></div>
   </div>
   <table>
     <thead><tr>
@@ -2391,7 +2446,6 @@ function exportPDF() {
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, '_blank');
-  // Trigger print dialog after load
   if (win) win.onload = () => { win.focus(); win.print(); };
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
