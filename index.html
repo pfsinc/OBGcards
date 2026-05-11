@@ -1599,6 +1599,7 @@ function markOrderComplete(orderNum) {
   if (!confirm(`Mark Order #${orderNum} as complete?\n\nThis will move it to the Completed Orders archive. You can reopen it at any time.`)) return;
   if (!psaOrders[orderNum]) psaOrders[orderNum] = { notes:[] };
   psaOrders[orderNum].complete = true;
+  psaOrders[orderNum].expanded = false; // always collapse on complete
   const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
   psaOrders[orderNum].completedDate = today;
   psaOrders[orderNum].notes.push({ date: today, text: 'Order marked complete' });
@@ -1609,6 +1610,7 @@ function markOrderComplete(orderNum) {
 function markOrderOpen(orderNum) {
   if (!psaOrders[orderNum]) return;
   psaOrders[orderNum].complete = false;
+  psaOrders[orderNum].expanded = true; // expand when reopened
   const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
   psaOrders[orderNum].notes.push({ date: today, text: 'Order reopened' });
   save();
@@ -1856,6 +1858,7 @@ function markDcOrderComplete(batchNum) {
   if (!confirm(`Mark Batch "${batchNum}" as complete?\n\nThis will archive it at the bottom. You can reopen it at any time.`)) return;
   if (!dcOrders[batchNum]) dcOrders[batchNum] = { notes:[] };
   dcOrders[batchNum].complete = true;
+  dcOrders[batchNum].expanded = false; // always collapse on complete
   const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
   dcOrders[batchNum].completedDate = today;
   dcOrders[batchNum].notes.push({ date: today, text: 'Batch marked complete' });
@@ -1866,6 +1869,7 @@ function markDcOrderComplete(batchNum) {
 function markDcOrderOpen(batchNum) {
   if (!dcOrders[batchNum]) return;
   dcOrders[batchNum].complete = false;
+  dcOrders[batchNum].expanded = true; // expand when reopened
   const today = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
   dcOrders[batchNum].notes.push({ date: today, text: 'Batch reopened' });
   save();
@@ -2513,7 +2517,7 @@ async function gDriveSave() {
   gSetLabel('gdrive-save-label', 'Saving...', true);
   gSignIn(async (token) => {
     try {
-      const content = JSON.stringify({ version:1, savedAt: new Date().toISOString(), cards }, null, 2);
+      const content = JSON.stringify({ version:1, savedAt: new Date().toISOString(), cards, psaOrders, dcOrders }, null, 2);
       const blob = new Blob([content], { type: 'application/json' });
       const fileId = await gFindFile(token);
 
@@ -2570,6 +2574,8 @@ async function gDriveLoad() {
         if (!replace) { gSetLabel('gdrive-load-label', '☁ Load from Drive'); return; }
       }
       cards = incoming;
+      if (data.psaOrders) psaOrders = data.psaOrders;
+      if (data.dcOrders) dcOrders = data.dcOrders;
       save();
       renderAll();
       gSetLabel('gdrive-load-label', `☁ Loaded ${incoming.length} cards ✓`);
